@@ -2,8 +2,6 @@
 
 Blueberry aims to be a light-weight server OS for aarch64-SBC's like the Raspberry Pi 4, heavily influenced by [Universal Blue](https://universal-blue.org/), in particular [uCore](https://github.com/ublue-os/ucore), but built on Fedora IOT. Like uCore, it's an opinionated, "batteries included" custom image, built daily with some common tools added in.
 
-Blueberry began life as a series of Ansible playbooks for configuring a Fedora IOT install, however due to the Fedora IOT image not being publicly available, this involved layering many of the packages. Eventually the end product became unstable, and the project was shelved towards the end of 2024. In the intervening months however, the FedoreaIOT image has been made available on [quay.io](https://quay.io/repository/fedora/fedora-iot), making this now a viable project.
-
 At present, Blueberry builds a single aarch64 image: **blueberry-minimal**. Based on [uCore minimal](https://github.com/ublue-os/ucore?tab=readme-ov-file#ucore-minimal), it is suitable for running containerized workloads on aarch64 systems supported by [Fedora IOT](https://docs.fedoraproject.org/en-US/iot/reference-platforms/). Like its influencer, this image tries to stay lightweight but functional:
 
 ## Blueberry Minimal
@@ -20,11 +18,25 @@ At present, Blueberry builds a single aarch64 image: **blueberry-minimal**. Base
 - Enables staging of automatic system updates via rpm-ostreed
 - Enables password based SSH auth (required for locally running cockpit web interface)
 
+### Architecture & Installation
+
+- **Architecture**: aarch64 only (for SBCs like Raspberry Pi 4)
+- **Installation method**: Rebase from existing Fedora IoT installation only
+- **Not supported**: Fresh installations, ISO/disk images, x86_64 architecture
+
+To rebase an existing Fedora IoT system to Blueberry:
+```bash
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry-minimal:latest
+systemctl reboot
+```
+
 > [!IMPORTANT]
 > Per [cockpit's instructions](https://cockpit-project.org/running.html#coreos) the cockpit-ws RPM is **not** installed, rather it is provided as a pre-defined systemd service which runs a podman container.
 
 > [!NOTE]
 > Key differences between Blueberry Minimal and uCore-minimal:
+> - **Architecture**: aarch64 only (uCore supports x86_64 and aarch64)
+> - **Installation**: Rebase-only (uCore supports fresh installs via ISO/disk images)
 > - **Container tools**: Given the focus on SBC hardware, a single container engine is preferred. Podman is provided out-of-the-box with Fedora IoT.
 > - **udev rules**: Not required, as only devices already supported by Fedora IoT are currently in scope.
 > - **ZFS**: Generally discouraged on SBCs due to poor performance with USB-based storage.
@@ -50,3 +62,17 @@ This structure:
 - Mirrors the Linux filesystem hierarchy for clarity
 - Enables clean multi-image support for future variants (e.g., blueberry-desktop, blueberry-k3s)
 - Maintains compatibility with uCore patterns
+
+## Build & Release
+
+Blueberry follows uCore's build workflow conventions:
+
+- **Workflow organization**: Version-specific workflows (`build-43.yml`, `build-44.yml`) delegate to a reusable workflow (`reusable-build.yml`)
+- **Build schedule**: Daily builds at 2:30 UTC (Fedora 44) and 2:35 UTC (Fedora 43)
+- **Image registry**: GitHub Container Registry (GHCR)
+- **Image signing**: All published images are signed with Cosign
+- **Tags**:
+  - `latest` - Most recent build of the default version (Fedora 44)
+  - `YYYYMMDD` - Daily dated builds (e.g., `20260214`)
+  
+Images are built only for **aarch64** architecture and are intended for **rebase-only** installation on existing Fedora IoT systems.

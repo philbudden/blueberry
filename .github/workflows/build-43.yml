@@ -1,0 +1,30 @@
+---
+name: Build Blueberry 43
+on:
+  schedule:
+    - cron: "35 2 * * *" # 2:35 UTC daily
+  push:
+    branches:
+      - main
+    paths:
+      - blueberry-minimal/**
+      - .github/workflows/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - blueberry-minimal/**
+      - .github/workflows/**
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Blueberry (Fedora IoT 43)
+    uses: ./.github/workflows/reusable-build.yml
+    secrets: inherit
+    with:
+      fedora_version: "43"
