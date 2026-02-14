@@ -27,3 +27,24 @@ At present, Blueberry only builds a single, aarch64 image, based on [uCore minim
 > - **udev rules**: Not required, as only devices already supported by Fedora IoT are currently in scope.
 > - **ZFS**: Generally discouraged on SBCs due to poor performance with USB-based storage.
 > - **NVIDIA support**: While some older GPUs have been adapted for Raspberry Pi devices, this remains a rare and non-standard use case.
+
+## Repository Structure
+
+The repository follows [uCore's](https://github.com/ublue-os/ucore) organizational conventions:
+
+```
+blueberry/                          # Main image source directory
+├── Containerfile                   # Image build definition
+├── install-blueberry.sh            # Package installation script
+├── cleanup.sh                      # Image cleanup script
+└── system_files/                   # System configuration hierarchy
+    ├── etc/                        # System configuration files
+    │   └── ssh/sshd_config.d/      # SSH configuration
+    └── usr/lib/systemd/system/     # Systemd unit files
+```
+
+This structure:
+- Separates build logic from system configuration
+- Mirrors the Linux filesystem hierarchy for clarity
+- Enables clean multi-image support for future variants
+- Maintains compatibility with uCore patterns
