@@ -99,6 +99,8 @@ jobs:
           image: ${{ steps.env.outputs.image_name }}
           tags: |
             ${{ needs.build-info.outputs.pr_prefix }}${{ steps.env.outputs.sha_short }}
+            ${{ steps.env.outputs.build_date }}
+            latest
           build-args: |
             FEDORA_VERSION=${{ needs.build-info.outputs.fedora_version }}
             ARCH=aarch64
@@ -113,30 +115,25 @@ jobs:
           oci: false
 
       - name: Push image to GHCR
+        id: push
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: Wandalen/wretry.action@6feedb7dedadeb826de0f45ff482b53b379a7844 # v3.5.0
-        env:
-          REGISTRY_USER: ${{ github.actor }}
-          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
         with:
-          attempt_limit: 3
-          attempt_delay: 15000
-          command: |
-            set -euo pipefail
-            
-            # Login to GHCR
-            buildah login -u "$REGISTRY_USER" -p "$REGISTRY_PASSWORD" ${{ env.IMAGE_REGISTRY }}
-            
-            # Tag and push with multiple tags
-            IMAGE_ID="${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.pr_prefix }}${{ steps.env.outputs.sha_short }}"
-            
-            # Tag with date (YYYYMMDD)
-            buildah tag "${IMAGE_ID}" "${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.build_date }}"
-            buildah push "${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.build_date }}"
-            
-            # Tag with latest
-            buildah tag "${IMAGE_ID}" "${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:latest"
-            buildah push "${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:latest"
+          registry: ${{ env.IMAGE_REGISTRY }}
+          image: ${{ steps.env.outputs.image_name }}
+          tags: |
+            ${{ steps.env.outputs.build_date }}
+            latest
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to GHCR for signing
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install cosign
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -147,11 +144,9 @@ jobs:
         run: |
           set -euo pipefail
           
+          # Sign using digest from push step output
           cosign sign -y --key env://COSIGN_PRIVATE_KEY \
-            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.build_date }}
-          
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY \
-            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:latest
+            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}@${{ steps.push.outputs.digest }}
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
