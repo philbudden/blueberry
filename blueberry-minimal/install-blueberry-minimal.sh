@@ -1,5 +1,5 @@
 #!/bin/bash
-# install-blueberry.sh - Install Blueberry packages and enable services
+# install-blueberry-minimal.sh - Install Blueberry Minimal packages and enable services
 
 set -ouex pipefail
 
