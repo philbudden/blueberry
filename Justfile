@@ -1,6 +1,7 @@
-export image_name := env("IMAGE_NAME", "image-template") # output image name, usually same as repo name, change as needed
+export image_name := env("IMAGE_NAME", "blueberry-minimal") # output image name
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
+export image_dir := "blueberry-minimal" # image source directory
 
 alias build-vm := build-qcow2
 alias rebuild-vm := rebuild-qcow2
@@ -98,7 +99,8 @@ build $target_image=image_name $tag=default_tag:
         "${BUILD_ARGS[@]}" \
         --pull=newer \
         --tag "${target_image}:${tag}" \
-        .
+        -f "${image_dir}/Containerfile" \
+        "${image_dir}"
 
 # Command: _rootful_load_image
 # Description: This script checks if the current user is root or running under sudo. If not, it attempts to resolve the image tag using podman inspect.
