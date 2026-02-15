@@ -13,10 +13,17 @@ COPY . /
 FROM ${IMAGE_REGISTRY}/blueberry-minimal:latest
 
 ### SYSTEM CONFIGURATION
-## Copy system configuration files into the image (if any added)
+## Copy system configuration files into the image
 
-# COPY system_files/etc /etc/
-# COPY system_files/usr /usr/
+COPY --from=ctx /system_files/usr/ /usr/
+
+# Verify ujust files were copied correctly
+RUN set -x && \
+    ls -la /usr/bin/ujust && \
+    ls -laR /usr/share/ublue-os/ && \
+    test -x /usr/bin/ujust && \
+    test -f /usr/share/ublue-os/justfile && \
+    echo "✓ ujust files verified"
 
 ### PACKAGE INSTALLATION
 ## Install storage primitives and observability packages

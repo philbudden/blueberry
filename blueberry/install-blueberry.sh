@@ -12,6 +12,7 @@ set -ouex pipefail
 dnf5 install -y \
     cockpit-storaged \
     hdparm \
+    just \
     mdadm \
     smartmontools
 

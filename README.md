@@ -55,6 +55,10 @@ Builds on `blueberry-minimal` with storage primitives and observability for edge
 **Observability:**
 - `pcp-zeroconf` - Performance Co-Pilot monitoring
 
+**User Experience:**
+- `just` - Command runner for task automation
+- `ujust` - User-friendly wrapper for just (see [ujust Usage](#ujust-task-runner))
+
 **Design Philosophy:**
 - Provides **primitives**, not policy
 - Storage services (SMB, NFS, SnapRAID, MergerFS) run in **containers**, not on the host
@@ -82,6 +86,33 @@ While USB storage is the primary target for SBC environments, multi-USB RAID con
 - Lightweight alternative to ZFS (which is too heavy for SBC/USB constraints)
 
 `mdadm` is the only viable RAID primitive for this environment—no datacenter assumptions, minimal overhead, suitable for USB-connected drives.
+
+### ujust Task Runner
+
+Blueberry includes `ujust`, a user-friendly task runner system for common system management operations.
+
+**Usage:**
+```bash
+# List available tasks
+ujust
+
+# Interactive task selection
+ujust --choose
+
+# Run a specific task
+ujust system-info
+ujust verify-storage-tools
+```
+
+**Available tasks:**
+- `system-info` - Display system information (image, kernel, storage, memory, network)
+- `image-info` - Show current image version and update status
+- `logs-this-boot` - Show system logs from current boot
+- `logs-last-boot` - Show system logs from previous boot
+- `verify-storage-tools` - Verify all storage primitives are installed
+- `monitoring-status` - Show PCP monitoring service status
+
+Users can extend ujust by adding custom tasks in `/usr/share/ublue-os/just/60-custom.just` (create this file to add your own recipes).
 
 ## General Architecture & Installation
 

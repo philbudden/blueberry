@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+# ujust - Universal Blue just wrapper for Blueberry
+# Provides user-friendly task runner interface
+
+/usr/bin/just --justfile /usr/share/ublue-os/justfile "${@}"

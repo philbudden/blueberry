@@ -1,0 +1,18 @@
+# Blueberry Justfile
+# Main entry point for ujust task runner system
+# vim: set ft=make :
+
+set allow-duplicate-recipes := true
+set ignore-comments := true
+
+# Default task - show available commands
+_default:
+    @echo "Blueberry ujust task runner"
+    @echo ""
+    @echo "Usage: ujust [--choose] [task]"
+    @echo ""
+    @echo "Available commands:"
+    @just --justfile /usr/share/ublue-os/justfile --list --list-prefix " - "
+
+# Import task modules
+import "/usr/share/ublue-os/just/00-system.just"
