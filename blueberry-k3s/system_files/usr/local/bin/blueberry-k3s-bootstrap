@@ -115,7 +115,7 @@ if [[ "$MODE" == "server" ]]; then
     echo ""
 
     # Create K3s server configuration
-    mkdir -p /etc/rancher/k3s /etc/blueberry-k3s
+    mkdir -p /etc/rancher/k3s /etc/blueberry-k3s /var/lib/rancher/k3s
 
     if [[ "$CLUSTER_INIT" == true ]]; then
         cat > /etc/blueberry-k3s/k3s-server.env <<EOF
@@ -160,7 +160,7 @@ elif [[ "$MODE" == "agent" ]]; then
     echo ""
 
     # Create K3s agent configuration
-    mkdir -p /etc/rancher/k3s /etc/blueberry-k3s
+    mkdir -p /etc/rancher/k3s /etc/blueberry-k3s /var/lib/rancher/k3s
 
     cat > /etc/blueberry-k3s/k3s-agent.env <<EOF
 K3S_URL=$SERVER_URL

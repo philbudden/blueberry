@@ -31,7 +31,8 @@ ln -sf /usr/local/bin/k3s /usr/local/bin/ctr
 
 ### Create K3s directories
 # These directories are required for K3s operation
-# Note: /var/lib/rancher/k3s persists across image updates (mutable state)
+# Note: /var/lib/rancher/k3s is created at build time to satisfy bootc linting
+#       but will be recreated at runtime by bootstrap script (since /var is mutable)
 
 mkdir -p /etc/rancher/k3s
 mkdir -p /var/lib/rancher/k3s
