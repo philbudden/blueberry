@@ -124,6 +124,14 @@ jobs:
             containers.bootc=1
           oci: false
 
+      - name: Tag image with registry prefix for local use
+        if: matrix.image_name == 'blueberry-minimal'
+        run: |
+          # Tag blueberry-minimal with full registry path so blueberry build can find it locally
+          sudo podman tag \
+            ${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }} \
+            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
+
       - name: Push image to GHCR
         id: push
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
