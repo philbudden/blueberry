@@ -137,7 +137,7 @@ jobs:
           echo "=== Build outputs ==="
           echo "Image: ${{ steps.build.outputs.image }}"
           echo "Tags: ${{ steps.build.outputs.tags }}"
-          echo "Image ID: ${{ steps.build.outputs.image-id }}"
+          echo "Image-with-tag: ${{ steps.build.outputs.image-with-tag }}"
 
       - name: Tag image with registry prefix for local use
         if: matrix.image_name == 'blueberry-minimal'
@@ -149,9 +149,9 @@ jobs:
           IMG="${{ steps.env.outputs.image_name }}"
           FEDORA_VER="${{ needs.build-info.outputs.fedora_version }}"
 
-          # Use the image ID from the build output
-          IMAGE_ID="${{ steps.build.outputs.image-id }}"
-          sudo buildah tag "${IMAGE_ID}" "${REGISTRY}/${IMG}:${FEDORA_VER}"
+          # Use image-with-tag output which is "image:firsttag"
+          BUILT_IMAGE="${{ steps.build.outputs.image-with-tag }}"
+          sudo buildah tag "${BUILT_IMAGE}" "${REGISTRY}/${IMG}:${FEDORA_VER}"
 
       - name: Push image to GHCR
         id: push
