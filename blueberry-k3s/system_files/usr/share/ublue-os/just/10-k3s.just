@@ -262,7 +262,7 @@ flux-status:
 
 # Display FluxCD version
 flux-version:
-    #!/usr'bin/bash
+    #!/usr/bin/bash
     if [[ -f /etc/blueberry-k3s/flux-version ]]; then
         echo "FluxCD CLI version: $(cat /etc/blueberry-k3s/flux-version)"
     else

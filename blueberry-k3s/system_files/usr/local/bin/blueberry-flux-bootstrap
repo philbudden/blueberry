@@ -58,7 +58,7 @@ fi
 PROVIDER=""
 OWNER=""
 REPO=""
-PATH="clusters/blueberry"
+FLUX_PATH="clusters/blueberry"
 PERSONAL=false
 TOKEN_FILE="$HOME/.github-token"
 
@@ -80,7 +80,7 @@ while [[ $# -gt 0 ]]; do
 		shift 2
 		;;
 	--path)
-		PATH="$2"
+		FLUX_PATH="$2"
 		shift 2
 		;;
 	--personal)
@@ -143,7 +143,7 @@ echo "FluxCD CLI version: $FLUX_VERSION"
 echo "Provider: $PROVIDER"
 if [[ "$PROVIDER" == "github" ]]; then
 	echo "Repository: $OWNER/$REPO"
-	echo "Path: $PATH"
+	echo "Path: $FLUX_PATH"
 fi
 echo ""
 
@@ -164,7 +164,7 @@ if [[ "$PROVIDER" == "github" ]]; then
 		github
 		--owner="$OWNER"
 		--repository="$REPO"
-		--path="$PATH"
+		--path="$FLUX_PATH"
 		--branch=main
 	)
 
@@ -195,4 +195,4 @@ echo "  flux check"
 echo "  kubectl get pods -n flux-system"
 echo ""
 echo "FluxCD will now continuously reconcile manifests from:"
-echo "  $OWNER/$REPO ($PATH)"
+echo "  $OWNER/$REPO ($FLUX_PATH)"
