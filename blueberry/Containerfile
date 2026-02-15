@@ -1,0 +1,46 @@
+# Blueberry Containerfile
+# Storage primitives + observability image built from blueberry-minimal
+
+ARG FEDORA_VERSION="${FEDORA_VERSION:-44}"
+ARG ARCH="${ARCH:-aarch64}"
+ARG IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/philbudden}"
+
+# Allow build scripts to be referenced without being copied into the final image
+FROM scratch AS ctx
+COPY . /
+
+# Base Image - Build from blueberry-minimal
+FROM ${IMAGE_REGISTRY}/blueberry-minimal:latest
+
+### SYSTEM CONFIGURATION
+## Copy system configuration files into the image (if any added)
+
+# COPY system_files/etc /etc/
+# COPY system_files/usr /usr/
+
+### PACKAGE INSTALLATION
+## Install storage primitives and observability packages
+
+RUN --mount=type=bind,from=ctx,src=/,dst=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-blueberry.sh
+
+### CLEANUP
+## Clean up image layers to reduce size
+
+RUN --mount=type=bind,from=ctx,src=/,dst=/ctx \
+    /ctx/cleanup.sh
+
+### LINTING
+## Verify final image and contents are correct
+
+RUN bootc container lint
+
+### METADATA
+## Image labels for OCI compatibility
+
+LABEL org.opencontainers.image.title="Blueberry"
+LABEL org.opencontainers.image.description="Fedora IoT-based image with storage primitives and observability for aarch64 SBCs"
+LABEL org.opencontainers.image.source="https://github.com/philbudden/blueberry"
