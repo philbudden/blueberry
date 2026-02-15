@@ -43,8 +43,8 @@ jobs:
           
           echo "Fedora IoT version: ${IMAGE_VERSION}"
 
-  build-image:
-    name: Build Image
+  build-images:
+    name: Build Images
     runs-on: ubuntu-24.04-arm
     needs: build-info
     permissions:
@@ -52,10 +52,12 @@ jobs:
       packages: write
       id-token: write
     strategy:
+      max-parallel: 1  # Build sequentially to ensure blueberry-minimal completes before blueberry
       fail-fast: false
       matrix:
         image_name:
           - blueberry-minimal
+          - blueberry
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -87,7 +89,14 @@ jobs:
           attempt_limit: 3
           attempt_delay: 15000
           command: |
+            # Pull Fedora IoT base (always needed for blueberry-minimal)
             sudo podman pull quay.io/fedora/fedora-iot:${{ needs.build-info.outputs.fedora_version }}-aarch64
+            
+            # For blueberry build, also pull blueberry-minimal if it exists in registry
+            # This allows rebuilding blueberry without rebuilding minimal
+            if [[ "${{ matrix.image_name }}" == "blueberry" ]]; then
+              sudo podman pull ${{ env.IMAGE_REGISTRY }}/blueberry-minimal:${{ needs.build-info.outputs.fedora_version }} || true
+            fi
 
       - name: Build image
         id: build
@@ -100,6 +109,7 @@ jobs:
           tags: |
             ${{ needs.build-info.outputs.pr_prefix }}${{ steps.env.outputs.sha_short }}
             ${{ steps.env.outputs.build_date }}
+            ${{ needs.build-info.outputs.fedora_version }}
             latest
           build-args: |
             FEDORA_VERSION=${{ needs.build-info.outputs.fedora_version }}
@@ -107,12 +117,32 @@ jobs:
           labels: |
             org.opencontainers.image.title=${{ matrix.image_name }}
             org.opencontainers.image.version=${{ needs.build-info.outputs.image_version }}
-            org.opencontainers.image.description=Minimal Fedora IoT-based server image for aarch64 SBCs
+            org.opencontainers.image.description=Fedora IoT-based image for aarch64 SBCs
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ steps.env.outputs.build_date }}
             containers.bootc=1
           oci: false
+
+      - name: List available images (debug)
+        if: matrix.image_name == 'blueberry-minimal'
+        run: |
+          echo "=== Listing all images ==="
+          sudo podman images
+          echo "=== Build outputs ==="
+          echo "Image: ${{ steps.build.outputs.image }}"
+          echo "Tags: ${{ steps.build.outputs.tags }}"
+
+      - name: Tag image with registry prefix for local use
+        if: matrix.image_name == 'blueberry-minimal'
+        run: |
+          # Tag blueberry-minimal with GHCR path so blueberry Containerfile finds it locally
+          # When Containerfile does FROM ghcr.io/.../blueberry-minimal:44, buildah checks
+          # local storage first before trying to pull, so this will be used
+          # Note: buildah creates images with 'localhost/' prefix, so we use that here
+          sudo podman tag \
+            localhost/${{ steps.build.outputs.image }}:latest \
+            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
 
       - name: Push image to GHCR
         id: push
@@ -123,6 +153,7 @@ jobs:
           image: ${{ steps.env.outputs.image_name }}
           tags: |
             ${{ steps.env.outputs.build_date }}
+            ${{ needs.build-info.outputs.fedora_version }}
             latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
