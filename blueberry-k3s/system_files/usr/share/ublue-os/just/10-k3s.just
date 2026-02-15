@@ -196,3 +196,80 @@ k3s-logs:
         echo "K3s is not running."
         exit 1
     fi
+
+# Bootstrap FluxCD on K3s cluster (GitHub)
+flux-bootstrap-github:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  FluxCD Bootstrap (GitHub)                     ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "This will bootstrap FluxCD on your K3s cluster using GitHub."
+    echo ""
+    echo "Requirements:"
+    echo "  1. K3s server must be running (ujust k3s-init-server)"
+    echo "  2. GitHub repository (will be created if it doesn't exist)"
+    echo "  3. GitHub personal access token with 'repo' scope"
+    echo ""
+    read -p "GitHub Owner (username or org): " owner
+    read -p "Repository Name: " repo
+    read -p "Token File Path [~/.github-token]: " token_file
+
+    token_file=${token_file:-~/.github-token}
+
+    if [[ -z "$owner" || -z "$repo" ]]; then
+        echo "Error: Owner and repository name are required."
+        exit 1
+    fi
+
+    sudo /usr/local/bin/blueberry-flux-bootstrap github \
+        --owner "$owner" \
+        --repository "$repo" \
+        --token-file "$token_file"
+
+# Check FluxCD status
+flux-status:
+    #!/usr/bin/bash
+    if ! command -v flux &>/dev/null; then
+        echo "FluxCD CLI not installed (this should not happen on blueberry-k3s)"
+        exit 1
+    fi
+
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  FluxCD Status                                 ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+
+    # Show version
+    FLUX_VERSION=$(cat /etc/blueberry-k3s/flux-version 2>/dev/null || echo "unknown")
+    echo "FluxCD CLI version: $FLUX_VERSION"
+    echo ""
+
+    # Check if Flux is installed on cluster
+    if flux check &>/dev/null; then
+        echo "FluxCD Status: ✓ Installed"
+        echo ""
+        flux check
+        echo ""
+        echo "─── Flux Resources ─────────────────────────────────"
+        kubectl get pods -n flux-system 2>/dev/null || echo "flux-system namespace not found"
+    else
+        echo "FluxCD Status: ✗ Not installed on cluster"
+        echo ""
+        echo "To bootstrap FluxCD:"
+        echo "  ujust flux-bootstrap-github"
+    fi
+
+# Display FluxCD version
+flux-version:
+    #!/usr'bin/bash
+    if [[ -f /etc/blueberry-k3s/flux-version ]]; then
+        echo "FluxCD CLI version: $(cat /etc/blueberry-k3s/flux-version)"
+    else
+        echo "FluxCD version file not found"
+    fi
+
+    if command -v flux &>/dev/null; then
+        echo ""
+        flux --version
+    fi

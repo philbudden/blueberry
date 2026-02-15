@@ -166,6 +166,13 @@ ujust k3s-version      # Show binary and state versions
 ujust k3s-logs         # Follow K3s logs
 ```
 
+**Bootstrap FluxCD (GitOps):**
+```bash
+ujust flux-bootstrap-github  # Interactive FluxCD bootstrap
+ujust flux-status            # Check FluxCD installation
+ujust flux-version           # Show FluxCD CLI version
+```
+
 **Get server token (for adding agents):**
 ```bash
 ujust k3s-get-token

@@ -1,0 +1,198 @@
+#!/bin/bash
+# blueberry-flux-bootstrap - Bootstrap FluxCD on K3s cluster
+# This script initializes FluxCD GitOps automation on an active K3s cluster
+
+set -euo pipefail
+
+# Usage information
+usage() {
+	cat <<EOF
+Usage: blueberry-flux-bootstrap <git-provider> [options]
+
+Git Providers:
+  github              Bootstrap using GitHub repository
+  gitlab              Bootstrap using GitLab repository (not yet implemented)
+  generic             Bootstrap using generic git repository (not yet implemented)
+
+GitHub Options:
+  --owner <owner>     GitHub repository owner (required)
+  --repository <repo> GitHub repository name (required)
+  --path <path>       Path within repo for manifests (default: clusters/blueberry)
+  --personal          Use personal GitHub account (default: false)
+  --token-file <file> Path to GitHub token file (default: ~/.github-token)
+
+Examples:
+  # Bootstrap with GitHub
+  blueberry-flux-bootstrap github --owner myorg --repository fleet-infra
+
+  # Bootstrap with token from file
+  blueberry-flux-bootstrap github --owner myorg --repository fleet-infra --token-file /var/secrets/github-token
+
+Requirements:
+  - K3s server must be running (ujust k3s-init-server)
+  - GitHub personal access token with 'repo' scope saved to token file
+  - Network connectivity to GitHub
+
+EOF
+	exit 1
+}
+
+# Verify K3s is running
+if ! systemctl is-active k3s-server.service &>/dev/null; then
+	echo "Error: K3s server is not running."
+	echo ""
+	echo "FluxCD requires an active K3s cluster."
+	echo "Initialize K3s first:"
+	echo "  ujust k3s-init-server"
+	exit 1
+fi
+
+# Verify kubectl works
+if ! kubectl get nodes &>/dev/null; then
+	echo "Error: Cannot communicate with K3s cluster."
+	echo "Check K3s status: ujust k3s-status"
+	exit 1
+fi
+
+# Parse arguments
+PROVIDER=""
+OWNER=""
+REPO=""
+PATH="clusters/blueberry"
+PERSONAL=false
+TOKEN_FILE="$HOME/.github-token"
+
+if [[ $# -eq 0 ]]; then
+	usage
+fi
+
+PROVIDER=$1
+shift
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	--owner)
+		OWNER="$2"
+		shift 2
+		;;
+	--repository)
+		REPO="$2"
+		shift 2
+		;;
+	--path)
+		PATH="$2"
+		shift 2
+		;;
+	--personal)
+		PERSONAL=true
+		shift
+		;;
+	--token-file)
+		TOKEN_FILE="$2"
+		shift 2
+		;;
+	*)
+		echo "Unknown option: $1"
+		usage
+		;;
+	esac
+done
+
+# Validate provider
+if [[ "$PROVIDER" != "github" && "$PROVIDER" != "gitlab" && "$PROVIDER" != "generic" ]]; then
+	echo "Error: Invalid provider '$PROVIDER'."
+	usage
+fi
+
+# Validate GitHub requirements
+if [[ "$PROVIDER" == "github" ]]; then
+	if [[ -z "$OWNER" || -z "$REPO" ]]; then
+		echo "Error: GitHub provider requires --owner and --repository."
+		usage
+	fi
+
+	if [[ ! -f "$TOKEN_FILE" ]]; then
+		echo "Error: GitHub token file not found: $TOKEN_FILE"
+		echo ""
+		echo "Create a GitHub personal access token with 'repo' scope and save to:"
+		echo "  $TOKEN_FILE"
+		echo ""
+		echo "Example:"
+		echo "  echo 'ghp_your_token_here' > ~/.github-token"
+		echo "  chmod 600 ~/.github-token"
+		exit 1
+	fi
+fi
+
+# Check for existing Flux installation
+if flux check &>/dev/null; then
+	echo "Error: FluxCD is already installed on this cluster."
+	echo ""
+	echo "To reinstall, first uninstall Flux:"
+	echo "  flux uninstall"
+	exit 1
+fi
+
+# Display Flux version
+echo "╔════════════════════════════════════════════════╗"
+echo "║  FluxCD Bootstrap                              ║"
+echo "╚════════════════════════════════════════════════╝"
+echo ""
+FLUX_VERSION=$(cat /etc/blueberry-k3s/flux-version)
+echo "FluxCD CLI version: $FLUX_VERSION"
+echo "Provider: $PROVIDER"
+if [[ "$PROVIDER" == "github" ]]; then
+	echo "Repository: $OWNER/$REPO"
+	echo "Path: $PATH"
+fi
+echo ""
+
+# Pre-flight checks
+echo "Running pre-flight checks..."
+flux check --pre
+
+echo ""
+echo "Press Ctrl+C to abort, or Enter to continue..."
+read -r
+
+# Bootstrap based on provider
+if [[ "$PROVIDER" == "github" ]]; then
+	GITHUB_TOKEN=$(cat "$TOKEN_FILE")
+	export GITHUB_TOKEN
+
+	BOOTSTRAP_ARGS=(
+		github
+		--owner="$OWNER"
+		--repository="$REPO"
+		--path="$PATH"
+		--branch=main
+	)
+
+	if [[ "$PERSONAL" == true ]]; then
+		BOOTSTRAP_ARGS+=(--personal)
+	fi
+
+	echo "Bootstrapping FluxCD with GitHub..."
+	flux bootstrap "${BOOTSTRAP_ARGS[@]}"
+
+elif [[ "$PROVIDER" == "gitlab" ]]; then
+	echo "Error: GitLab provider not yet implemented."
+	echo "Contribution welcome!"
+	exit 1
+
+elif [[ "$PROVIDER" == "generic" ]]; then
+	echo "Error: Generic git provider not yet implemented."
+	echo "Contribution welcome!"
+	exit 1
+fi
+
+echo ""
+echo "✓ FluxCD bootstrapped successfully"
+echo ""
+echo "Check FluxCD status:"
+echo "  ujust flux-status"
+echo "  flux check"
+echo "  kubectl get pods -n flux-system"
+echo ""
+echo "FluxCD will now continuously reconcile manifests from:"
+echo "  $OWNER/$REPO ($PATH)"

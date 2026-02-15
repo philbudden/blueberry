@@ -9,15 +9,23 @@ Lightweight Kubernetes node image for aarch64 SBCs, built on Blueberry.
 - Learning Kubernetes on SBC hardware
 - Lightweight container orchestration
 - Single-node or small cluster deployments
+- GitOps-driven infrastructure management
 
 This image inherits all capabilities from `blueberry` (storage primitives, observability) and adds K3s with explicit lifecycle management.
 
-## K3s Version
+## Included Components
 
+### K3s
 - **Current version**: v1.31.4+k3s1
 - **Installation method**: Binary distribution from GitHub releases
 - **Version pinning**: Explicit per image release
 - **Components**: k3s, kubectl, crictl, ctr (single binary)
+
+### FluxCD
+- **Current version**: v2.4.0
+- **Installation method**: Binary distribution from GitHub releases
+- **Version pinning**: Explicit per image release
+- **Purpose**: GitOps automation and continuous reconciliation
 
 ## Architecture
 
@@ -162,11 +170,108 @@ After reset, you can reinitialize with `ujust k3s-init-server` or `ujust k3s-ini
 ## Monitoring & Status
 
 ```bash
+# K3s Commands
 ujust k3s-status       # Service status, cluster info
 ujust k3s-version      # Binary and state versions
 ujust k3s-logs         # Follow K3s logs
 ujust k3s-get-token    # Get server token (server only)
+
+# FluxCD Commands
+ujust flux-status      # Check FluxCD installation
+ujust flux-version     # Show FluxCD CLI version
 ```
+
+## GitOps with FluxCD
+
+### Overview
+
+FluxCD is pre-installed (CLI only) for GitOps automation. Bootstrap is explicit and user-controlled.
+
+### Prerequisites
+
+1. K3s server running (`ujust k3s-init-server`)
+2. GitHub repository (will be created if it doesn't exist)
+3. GitHub personal access token with `repo` scope
+
+### Bootstrap FluxCD
+
+```bash
+# Create GitHub token file
+echo 'ghp_your_token_here' > ~/.github-token
+chmod 600 ~/.github-token
+
+# Bootstrap FluxCD (interactive)
+ujust flux-bootstrap-github
+```
+
+During bootstrap, you'll provide:
+- GitHub owner (username or organization)
+- Repository name
+- Token file path (defaults to `~/.github-token`)
+
+### What Bootstrap Does
+
+1. Validates K3s is running
+2. Runs pre-flight checks
+3. Installs FluxCD controllers to K3s cluster
+4. Creates/updates GitHub repository with manifests
+5. Configures continuous reconciliation
+
+### Post-Bootstrap
+
+After bootstrapping, FluxCD will:
+- Continuously monitor the GitHub repository
+- Automatically apply manifest changes
+- Self-update when Flux manifests change
+- Reconcile cluster state with Git
+
+Check status:
+```bash
+ujust flux-status
+kubectl get pods -n flux-system
+flux get sources git
+flux get kustomizations
+```
+
+### Repository Structure
+
+FluxCD creates this structure in your repository:
+
+```
+fleet-infra/
+└── clusters/
+    └── blueberry/
+        └── flux-system/
+            ├── gotk-components.yaml
+            ├── gotk-sync.yaml
+            └── kustomization.yaml
+```
+
+Add your manifests alongside `flux-system/`:
+
+```
+fleet-infra/
+└── clusters/
+    └── blueberry/
+        ├── flux-system/
+        ├── apps/
+        │   └── my-app.yaml
+        └── infrastructure/
+            └── storage.yaml
+```
+
+### Version Tracking
+
+- FluxCD CLI version: `/etc/blueberry-k3s/flux-version` (immutable)
+- FluxCD controllers version: Managed by Flux itself (self-updating)
+
+### Uninstalling FluxCD
+
+```bash
+flux uninstall
+```
+
+This removes FluxCD from the cluster but does not affect the GitHub repository.
 
 ## Design Constraints
 
@@ -181,6 +286,14 @@ Per AGENTS.md and project requirements:
 - K3s version pinned per image release ✓
 - Version skew detection ✓
 - Rollback-aware ✓
+
+### GitOps Rules
+
+- FluxCD CLI pre-installed ✓
+- Bootstrap is explicit, not automatic ✓
+- FluxCD version pinned per image release ✓
+- GitHub token from file (not CLI arguments) ✓
+- K3s dependency validated before bootstrap ✓
 
 ### Single-Node Focus
 
@@ -212,6 +325,7 @@ Not appropriate for:
 2. **Downgrade safety**: Requires destructive reset.
 3. **State migration**: No automated migration between K3s versions.
 4. **HA support**: Embedded etcd clustering not tested or supported.
+5. **FluxCD providers**: Only GitHub supported; GitLab/generic git not yet implemented.
 
 ## Future Enhancements
 
@@ -221,6 +335,7 @@ Potential future features (not currently implemented):
 - State backup/restore utilities
 - Multi-node cluster management helpers
 - K3s version migration tooling
+- FluxCD GitLab/generic git provider support
 
 ## Files & Directories
 
@@ -230,11 +345,14 @@ Potential future features (not currently implemented):
 - `/usr/local/bin/kubectl` - Symlink to k3s
 - `/usr/local/bin/crictl` - Symlink to k3s
 - `/usr/local/bin/ctr` - Symlink to k3s
-- `/usr/local/bin/blueberry-k3s-bootstrap` - Bootstrap script
+- `/usr/local/bin/flux` - FluxCD CLI binary
+- `/usr/local/bin/blueberry-k3s-bootstrap` - K3s bootstrap script
+- `/usr/local/bin/blueberry-flux-bootstrap` - FluxCD bootstrap script
 - `/usr/local/bin/blueberry-k3s-version-check` - Version compatibility check
 - `/usr/lib/systemd/system/k3s-server.service` - Server systemd unit
 - `/usr/lib/systemd/system/k3s-agent.service` - Agent systemd unit
-- `/etc/blueberry-k3s/version` - Binary version marker
+- `/etc/blueberry-k3s/version` - K3s binary version marker
+- `/etc/blueberry-k3s/flux-version` - FluxCD CLI version marker
 
 ### Mutable (persists in /var)
 
@@ -286,9 +404,28 @@ journalctl -u k3s-agent.service -f
 ### Version mismatch details
 
 ```bash
-cat /etc/blueberry-k3s/version              # Binary version
-cat /var/lib/rancher/k3s/.version           # State version
+cat /etc/blueberry-k3s/version              # K3s binary version
+cat /etc/blueberry-k3s/flux-version         # FluxCD CLI version
+cat /var/lib/rancher/k3s/.version           # K3s state version
 /usr/local/bin/blueberry-k3s-version-check  # Run check manually
+```
+
+### FluxCD bootstrap fails
+
+Check prerequisites:
+```bash
+ujust k3s-status        # Ensure K3s is running
+flux check --pre        # Run pre-flight checks
+```
+
+Verify GitHub token:
+```bash
+cat ~/.github-token     # Token should start with 'ghp_'
+```
+
+Check network connectivity:
+```bash
+curl -I https://github.com
 ```
 
 ## Security Considerations

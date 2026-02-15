@@ -20,10 +20,12 @@ COPY --from=ctx /system_files/usr/ /usr/
 # Verify k3s files were copied correctly
 RUN set -x && \
     ls -la /usr/local/bin/blueberry-k3s-bootstrap && \
+    ls -la /usr/local/bin/blueberry-flux-bootstrap && \
     ls -la /usr/lib/systemd/system/k3s*.service && \
     ls -la /usr/share/ublue-os/just/10-k3s.just && \
     test -x /usr/local/bin/blueberry-k3s-bootstrap && \
-    echo "✓ k3s files verified"
+    test -x /usr/local/bin/blueberry-flux-bootstrap && \
+    echo "✓ k3s and flux files verified"
 
 ### PACKAGE INSTALLATION
 ## Install K3s binaries and dependencies
@@ -33,6 +35,14 @@ RUN --mount=type=bind,from=ctx,src=/,dst=/ctx \
     --mount=type=cache,dst=/var/log \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-blueberry-k3s.sh
+
+### FLUXCD INSTALLATION
+## Install FluxCD CLI binaries for GitOps automation
+
+RUN --mount=type=bind,from=ctx,src=/,dst=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-flux.sh
 
 ### CLEANUP
 ## Clean up image layers to reduce size
