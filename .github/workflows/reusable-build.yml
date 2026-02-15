@@ -125,13 +125,22 @@ jobs:
             containers.bootc=1
           oci: false
 
+      - name: List available images (debug)
+        if: matrix.image_name == 'blueberry-minimal'
+        run: |
+          echo "=== Listing all images ==="
+          sudo podman images
+          echo "=== Build outputs ==="
+          echo "Image: ${{ steps.build.outputs.image }}"
+          echo "Tags: ${{ steps.build.outputs.tags }}"
+
       - name: Tag image with registry prefix for local use
         if: matrix.image_name == 'blueberry-minimal'
         run: |
           # Tag blueberry-minimal with full registry path so blueberry build can find it locally
-          # buildah-build creates images with localhost/ prefix
+          # Use the image reference from the build output
           sudo podman tag \
-            localhost/${{ steps.env.outputs.image_name }}:latest \
+            ${{ steps.build.outputs.image }}:${{ needs.build-info.outputs.fedora_version }} \
             ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
 
       - name: Push image to GHCR
