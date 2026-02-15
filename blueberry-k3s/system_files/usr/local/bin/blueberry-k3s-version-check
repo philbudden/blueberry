@@ -1,0 +1,46 @@
+#!/bin/bash
+# blueberry-k3s-version-check - Verify K3s binary/state version compatibility
+# This script prevents starting K3s with incompatible binary/state versions
+
+set -euo pipefail
+
+# Get binary version from image
+BINARY_VERSION=""
+if [[ -f /etc/blueberry-k3s/version ]]; then
+    BINARY_VERSION=$(cat /etc/blueberry-k3s/version)
+fi
+
+# Get state version from /var (if K3s has been initialized)
+STATE_VERSION=""
+if [[ -f /var/lib/rancher/k3s/.version ]]; then
+    STATE_VERSION=$(cat /var/lib/rancher/k3s/.version)
+fi
+
+# If no state version exists, this is a first-time init - allow it
+if [[ -z "$STATE_VERSION" ]]; then
+    echo "K3s first-time initialization detected (no state version found)"
+    exit 0
+fi
+
+# If state version exists, verify compatibility
+if [[ "$BINARY_VERSION" != "$STATE_VERSION" ]]; then
+    echo "ERROR: K3s version mismatch detected!" >&2
+    echo "  Binary version (image): $BINARY_VERSION" >&2
+    echo "  State version (/var):   $STATE_VERSION" >&2
+    echo "" >&2
+    echo "This mismatch can occur after:" >&2
+    echo "  - rpm-ostree upgrade/rollback to a different image version" >&2
+    echo "  - Rebasing to a different blueberry-k3s image tag" >&2
+    echo "" >&2
+    echo "K3s will NOT start to prevent state corruption." >&2
+    echo "" >&2
+    echo "Resolution options:" >&2
+    echo "  1. Upgrade: If binary is newer, run 'ujust k3s-upgrade' (NOT IMPLEMENTED YET)" >&2
+    echo "  2. Rollback: Run 'rpm-ostree rollback' to previous image" >&2
+    echo "  3. Reset: Run 'ujust k3s-reset' to wipe state and reinitialize (DESTRUCTIVE)" >&2
+    echo "" >&2
+    exit 1
+fi
+
+echo "K3s version check passed: $BINARY_VERSION"
+exit 0

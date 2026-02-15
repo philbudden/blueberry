@@ -11,7 +11,7 @@ blueberry-minimal (base container host)
         ↓
 blueberry (storage primitives + observability)
         ↓
-blueberry-k3s (planned: lightweight Kubernetes)
+blueberry-k3s (lightweight Kubernetes)
 ```
 
 ## Blueberry Minimal
@@ -114,6 +114,113 @@ ujust verify-storage-tools
 
 Users can extend ujust by adding custom tasks in `/usr/share/ublue-os/just/60-custom.just` (create this file to add your own recipes).
 
+## Blueberry K3s
+
+Builds on `blueberry` with K3s for lightweight Kubernetes workloads on SBCs.
+
+**K3s Configuration:**
+- **Version**: v1.31.4+k3s1 (pinned per image release)
+- **Installation**: Binary distribution (single k3s binary includes server, agent, kubectl, crictl)
+- **Default state**: Disabled (must be explicitly initialized via ujust)
+- **Modes**: Server (control plane) or Agent (worker node)
+
+**Additional packages:**
+- `iptables` - Required for K3s network policy
+
+**Design Philosophy:**
+- K3s disabled by default - no automatic cluster initialization
+- Explicit server/agent mode selection via ujust
+- Single-node bootstrap capable (no HA assumptions)
+- Version skew detection prevents starting with incompatible state
+- Rollback-aware (/var state persists, version checks prevent corruption)
+
+**Use blueberry-k3s when**: You need lightweight Kubernetes for edge workloads, container orchestration, or learning Kubernetes on SBC hardware.
+
+### Installation (blueberry-k3s)
+
+To rebase an existing Fedora IoT system to Blueberry K3s:
+```bash
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry-k3s:latest
+systemctl reboot
+```
+
+### K3s Bootstrap Workflow
+
+**Initialize as server (control plane):**
+```bash
+ujust k3s-init-server
+```
+
+**Initialize as agent (worker node):**
+```bash
+ujust k3s-init-agent
+# You will be prompted for:
+#   - Server URL (e.g., https://192.168.1.100:6443)
+#   - Server token (get from server: sudo cat /var/lib/rancher/k3s/server/node-token)
+```
+
+**Check K3s status:**
+```bash
+ujust k3s-status       # Show service status and cluster info
+ujust k3s-version      # Show binary and state versions
+ujust k3s-logs         # Follow K3s logs
+```
+
+**Get server token (for adding agents):**
+```bash
+ujust k3s-get-token
+```
+
+**Reset K3s (destructive):**
+```bash
+ujust k3s-reset        # Removes all K3s state and configuration
+```
+
+### Version Pinning & Upgrades
+
+**Version Tracking:**
+- Binary version: `/etc/blueberry-k3s/version` (immutable, part of image)
+- State version: `/var/lib/rancher/k3s/.version` (mutable, created on init)
+
+**Upgrade Process:**
+1. When a new blueberry-k3s image is released with a newer K3s version
+2. After `rpm-ostree upgrade`, K3s will detect version mismatch
+3. K3s services will refuse to start (prevents state corruption)
+4. Manual upgrade required (mechanism TBD)
+
+**Rollback Implications:**
+- `rpm-ostree rollback` reverts the image (including K3s binary)
+- `/var/lib/rancher/k3s` state persists (not reverted)
+- Version check prevents older binary from starting against newer state
+- Resolution: Either roll forward or `ujust k3s-reset` (destructive)
+
+**Current Limitations:**
+- In-place K3s upgrades not yet implemented
+- Downgrades require `k3s-reset` (destructive)
+- Multi-version state migration not supported
+
+### Package Rationale
+
+**Why K3s over full Kubernetes?**
+
+K3s is specifically designed for resource-constrained environments:
+- Single binary (< 100MB) vs full Kubernetes distribution
+- Lower memory footprint (suitable for 4-8GB SBC RAM)
+- Bundled components (no separate etcd, no cloud provider dependencies)
+- SQLite default datastore (appropriate for single-node)
+- Binary distribution (no package dependencies, deterministic versioning)
+
+K3s is a CNCF-certified Kubernetes distribution suitable for production edge workloads.
+
+**Why binary installation over package manager?**
+
+- Deterministic versioning (exact K3s release pinned in image)
+- No external repository dependencies
+- Atomic updates via bootc/rpm-ostree
+- Follows GitOps principles (version in source control)
+
+Users can extend ujust by adding custom tasks in `/usr/share/ublue-os/just/60-custom.just` (create this file to add your own recipes).
+
 ## General Architecture & Installation
 
 - **Architecture**: aarch64 only (for SBCs like Raspberry Pi 4)
@@ -173,7 +280,7 @@ Blueberry follows uCore's build workflow conventions:
 - **Build schedule**: Daily builds at 2:30 UTC (Fedora 44) and 2:35 UTC (Fedora 43)
 - **Image registry**: GitHub Container Registry (GHCR)
 - **Image signing**: All published images are signed with Cosign
-- **Build order**: Images build sequentially to respect dependencies (blueberry-minimal → blueberry)
+- **Build order**: Images build sequentially to respect dependencies (blueberry-minimal → blueberry → blueberry-k3s)
 - **Tags**:
   - `latest` - Most recent build of the default version (Fedora 44)
   - `YYYYMMDD` - Daily dated builds (e.g., `20260214`)

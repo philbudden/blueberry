@@ -1,0 +1,189 @@
+#!/bin/bash
+# blueberry-k3s-bootstrap - Initialize K3s in server or agent mode
+# This script is the control plane for K3s initialization
+
+set -euo pipefail
+
+# Usage information
+usage() {
+    cat <<EOF
+Usage: blueberry-k3s-bootstrap <mode> [options]
+
+Modes:
+  server              Initialize K3s as a server (control plane)
+  agent               Initialize K3s as an agent (worker node)
+
+Server Options:
+  --cluster-init      Enable embedded etcd HA mode (NOT RECOMMENDED for single-node SBCs)
+
+Agent Options:
+  --server <url>      K3s server URL (required, e.g., https://192.168.1.100:6443)
+  --token <token>     K3s server token (required)
+
+Examples:
+  # Initialize as server (single-node)
+  blueberry-k3s-bootstrap server
+
+  # Initialize as agent
+  blueberry-k3s-bootstrap agent --server https://192.168.1.100:6443 --token K10abcd...
+
+EOF
+    exit 1
+}
+
+# Parse arguments
+MODE=""
+SERVER_URL=""
+TOKEN=""
+CLUSTER_INIT=false
+
+if [[ $# -eq 0 ]]; then
+    usage
+fi
+
+MODE=$1
+shift
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --server)
+            SERVER_URL="$2"
+            shift 2
+            ;;
+        --token)
+            TOKEN="$2"
+            shift 2
+            ;;
+        --cluster-init)
+            CLUSTER_INIT=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
+    esac
+done
+
+# Validate mode
+if [[ "$MODE" != "server" && "$MODE" != "agent" ]]; then
+    echo "Error: Invalid mode '$MODE'. Must be 'server' or 'agent'."
+    usage
+fi
+
+# Validate agent requirements
+if [[ "$MODE" == "agent" ]]; then
+    if [[ -z "$SERVER_URL" || -z "$TOKEN" ]]; then
+        echo "Error: Agent mode requires --server and --token options."
+        usage
+    fi
+fi
+
+# Check if K3s is already initialized
+if systemctl is-enabled k3s-server.service &>/dev/null || systemctl is-enabled k3s-agent.service &>/dev/null; then
+    echo "Error: K3s is already initialized."
+    echo ""
+    echo "Current state:"
+    systemctl status k3s-server.service k3s-agent.service --no-pager || true
+    echo ""
+    echo "To reinitialize, first run: ujust k3s-reset"
+    exit 1
+fi
+
+# Check for version compatibility
+echo "Checking K3s binary version..."
+BINARY_VERSION=$(cat /etc/blueberry-k3s/version)
+echo "K3s version: $BINARY_VERSION"
+
+# Initialize based on mode
+if [[ "$MODE" == "server" ]]; then
+    echo ""
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  Initializing K3s Server                       ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "Version: $BINARY_VERSION"
+    if [[ "$CLUSTER_INIT" == true ]]; then
+        echo "Mode: HA (embedded etcd)"
+        echo ""
+        echo "WARNING: HA mode is NOT recommended for single-node SBCs."
+        echo "Press Ctrl+C to abort, or Enter to continue..."
+        read -r
+    else
+        echo "Mode: Single-node"
+    fi
+    echo ""
+
+    # Create K3s server configuration
+    mkdir -p /etc/rancher/k3s /etc/blueberry-k3s
+
+    if [[ "$CLUSTER_INIT" == true ]]; then
+        cat > /etc/blueberry-k3s/k3s-server.env <<EOF
+K3S_CLUSTER_INIT=true
+EOF
+    else
+        # Single-node mode - no special config needed
+        touch /etc/blueberry-k3s/k3s-server.env
+    fi
+
+    # Record version in /var for state tracking
+    echo "$BINARY_VERSION" > /var/lib/rancher/k3s/.version
+
+    # Enable and start K3s server
+    echo "Enabling k3s-server.service..."
+    systemctl enable k3s-server.service
+
+    echo "Starting k3s-server.service..."
+    systemctl start k3s-server.service
+
+    echo ""
+    echo "✓ K3s server initialized successfully"
+    echo ""
+    echo "Waiting for K3s to become ready..."
+    sleep 10
+
+    # Show status
+    systemctl status k3s-server.service --no-pager || true
+    echo ""
+    echo "Kubeconfig: /etc/rancher/k3s/k3s.yaml"
+    echo "Use: kubectl get nodes"
+    echo ""
+
+elif [[ "$MODE" == "agent" ]]; then
+    echo ""
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  Initializing K3s Agent                        ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "Version: $BINARY_VERSION"
+    echo "Server: $SERVER_URL"
+    echo ""
+
+    # Create K3s agent configuration
+    mkdir -p /etc/rancher/k3s /etc/blueberry-k3s
+
+    cat > /etc/blueberry-k3s/k3s-agent.env <<EOF
+K3S_URL=$SERVER_URL
+K3S_TOKEN=$TOKEN
+EOF
+
+    # Record version in /var for state tracking
+    echo "$BINARY_VERSION" > /var/lib/rancher/k3s/.version
+
+    # Enable and start K3s agent
+    echo "Enabling k3s-agent.service..."
+    systemctl enable k3s-agent.service
+
+    echo "Starting k3s-agent.service..."
+    systemctl start k3s-agent.service
+
+    echo ""
+    echo "✓ K3s agent initialized successfully"
+    echo ""
+    echo "Waiting for K3s to join cluster..."
+    sleep 10
+
+    # Show status
+    systemctl status k3s-agent.service --no-pager || true
+    echo ""
+fi

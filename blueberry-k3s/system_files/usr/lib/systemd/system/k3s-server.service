@@ -1,0 +1,24 @@
+[Unit]
+Description=Lightweight Kubernetes Server (K3s)
+Documentation=https://k3s.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+EnvironmentFile=-/etc/rancher/k3s/k3s.env
+EnvironmentFile=-/etc/blueberry-k3s/k3s-server.env
+ExecStartPre=/usr/local/bin/blueberry-k3s-version-check
+ExecStart=/usr/local/bin/k3s server
+KillMode=process
+Delegate=yes
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+TimeoutStartSec=0
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

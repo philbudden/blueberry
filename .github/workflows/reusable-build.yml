@@ -261,3 +261,114 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+
+  build-k3s:
+    name: Build blueberry-k3s
+    runs-on: ubuntu-24.04-arm
+    needs: [build-info, build-blueberry]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up environment variables
+        id: env
+        run: |
+          set -euo pipefail
+          
+          # Lowercase the registry and image name
+          IMAGE_NAME="blueberry-k3s"
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          
+          # Set build date
+          BUILD_DATE=$(date -u +%Y%m%d)
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          
+          # Set short SHA
+          if [[ -z "$(git status -s)" ]]; then
+            SHA_SHORT=$(git rev-parse --short HEAD)
+          else
+            SHA_SHORT="dirty"
+          fi
+          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
+
+      - name: Pull blueberry base image
+        uses: Wandalen/wretry.action@6feedb7dedadeb826de0f45ff482b53b379a7844 # v3.5.0
+        with:
+          attempt_limit: 3
+          attempt_delay: 15000
+          command: |
+            # For PR builds, use the locally built image from previous job
+            # For main branch builds, pull from registry if exists, otherwise use local
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              echo "Using locally built blueberry from previous job"
+            else
+              # Try to pull latest, but don't fail if it doesn't exist yet (first build)
+              sudo podman pull ${{ env.IMAGE_REGISTRY }}/blueberry:latest || echo "No existing image, will use local build"
+            fi
+
+      - name: Build image
+        id: build
+        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
+        with:
+          containerfiles: |
+            ./blueberry-k3s/Containerfile
+          context: ./blueberry-k3s
+          image: ${{ steps.env.outputs.image_name }}
+          tags: |
+            ${{ needs.build-info.outputs.pr_prefix }}${{ steps.env.outputs.sha_short }}
+            ${{ steps.env.outputs.build_date }}
+            latest
+          build-args: |
+            FEDORA_VERSION=${{ needs.build-info.outputs.fedora_version }}
+            ARCH=aarch64
+            IMAGE_REGISTRY=${{ env.IMAGE_REGISTRY }}
+          labels: |
+            org.opencontainers.image.title=blueberry-k3s
+            org.opencontainers.image.version=${{ needs.build-info.outputs.image_version }}
+            org.opencontainers.image.description=Lightweight Kubernetes node image for aarch64 SBCs
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.env.outputs.build_date }}
+            containers.bootc=1
+          oci: false
+
+      - name: Push image to GHCR
+        id: push
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          image: ${{ steps.env.outputs.image_name }}
+          tags: |
+            ${{ steps.env.outputs.build_date }}
+            latest
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to GHCR for signing
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          set -euo pipefail
+          
+          # Sign using digest from push step output
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY \
+            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}@${{ steps.push.outputs.digest }}
+        env:
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}

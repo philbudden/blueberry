@@ -1,0 +1,53 @@
+# Blueberry K3s Containerfile
+# Lightweight Kubernetes node image built from blueberry
+
+ARG FEDORA_VERSION="${FEDORA_VERSION:-44}"
+ARG ARCH="${ARCH:-aarch64}"
+ARG IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/philbudden}"
+
+# Allow build scripts to be referenced without being copied into the final image
+FROM scratch AS ctx
+COPY . /
+
+# Base Image - Build from blueberry
+FROM ${IMAGE_REGISTRY}/blueberry:latest
+
+### SYSTEM CONFIGURATION
+## Copy system configuration files into the image
+
+COPY --from=ctx /system_files/usr/ /usr/
+
+# Verify k3s files were copied correctly
+RUN set -x && \
+    ls -la /usr/local/bin/blueberry-k3s-bootstrap && \
+    ls -la /usr/lib/systemd/system/k3s*.service && \
+    ls -la /usr/share/ublue-os/just/10-k3s.just && \
+    test -x /usr/local/bin/blueberry-k3s-bootstrap && \
+    echo "✓ k3s files verified"
+
+### PACKAGE INSTALLATION
+## Install K3s binaries and dependencies
+
+RUN --mount=type=bind,from=ctx,src=/,dst=/ctx \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-blueberry-k3s.sh
+
+### CLEANUP
+## Clean up image layers to reduce size
+
+RUN --mount=type=bind,from=ctx,src=/,dst=/ctx \
+    /ctx/cleanup.sh
+
+### LINTING
+## Verify final image and contents are correct
+
+RUN bootc container lint
+
+### METADATA
+## Image labels for OCI compatibility
+
+LABEL org.opencontainers.image.title="Blueberry K3s"
+LABEL org.opencontainers.image.description="Lightweight Kubernetes node image for aarch64 SBCs"
+LABEL org.opencontainers.image.source="https://github.com/philbudden/blueberry"

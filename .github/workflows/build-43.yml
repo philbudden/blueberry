@@ -9,6 +9,7 @@ on:
     paths:
       - blueberry-minimal/**
       - blueberry/**
+      - blueberry-k3s/**
       - .github/workflows/**
   pull_request:
     branches:
@@ -16,6 +17,7 @@ on:
     paths:
       - blueberry-minimal/**
       - blueberry/**
+      - blueberry-k3s/**
       - .github/workflows/**
   workflow_dispatch:
 

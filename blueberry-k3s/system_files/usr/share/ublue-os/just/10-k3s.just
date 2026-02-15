@@ -1,0 +1,198 @@
+# K3s Management Tasks for Blueberry K3s
+# vim: set ft=make :
+
+# Initialize K3s as a server (single-node control plane)
+k3s-init-server:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  K3s Server Initialization                     ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "This will initialize K3s in server mode (control plane)."
+    echo ""
+    echo "After initialization, this node will run Kubernetes workloads."
+    echo ""
+    echo "Press Ctrl+C to abort, or Enter to continue..."
+    read -r
+
+    sudo /usr/local/bin/blueberry-k3s-bootstrap server
+
+# Initialize K3s as an agent (worker node)
+k3s-init-agent:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  K3s Agent Initialization                      ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "This will initialize K3s in agent mode (worker node)."
+    echo ""
+    echo "You will need:"
+    echo "  1. The K3s server URL (e.g., https://192.168.1.100:6443)"
+    echo "  2. The K3s server token"
+    echo ""
+    echo "To get the token from the server, run:"
+    echo "  sudo cat /var/lib/rancher/k3s/server/node-token"
+    echo ""
+    read -p "Server URL: " server_url
+    read -p "Server Token: " server_token
+
+    if [[ -z "$server_url" || -z "$server_token" ]]; then
+        echo "Error: Server URL and token are required."
+        exit 1
+    fi
+
+    sudo /usr/local/bin/blueberry-k3s-bootstrap agent --server "$server_url" --token "$server_token"
+
+# Show K3s status and version information
+k3s-status:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  K3s Status                                    ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+
+    # Check which mode is running
+    if systemctl is-active k3s-server.service &>/dev/null; then
+        echo "Mode: Server"
+        echo "Status:"
+        systemctl status k3s-server.service --no-pager
+        echo ""
+        if command -v kubectl &>/dev/null; then
+            echo "─── Cluster Info ───────────────────────────────────"
+            kubectl get nodes 2>/dev/null || echo "kubectl not responding (K3s may be starting...)"
+        fi
+    elif systemctl is-active k3s-agent.service &>/dev/null; then
+        echo "Mode: Agent"
+        echo "Status:"
+        systemctl status k3s-agent.service --no-pager
+    elif systemctl is-enabled k3s-server.service &>/dev/null; then
+        echo "Mode: Server (configured but not running)"
+        systemctl status k3s-server.service --no-pager
+    elif systemctl is-enabled k3s-agent.service &>/dev/null; then
+        echo "Mode: Agent (configured but not running)"
+        systemctl status k3s-agent.service --no-pager
+    else
+        echo "K3s is not initialized."
+        echo ""
+        echo "To initialize K3s, run:"
+        echo "  ujust k3s-init-server  (for server/control plane)"
+        echo "  ujust k3s-init-agent   (for worker node)"
+    fi
+    echo ""
+
+# Display K3s version information
+k3s-version:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  K3s Version Information                       ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+
+    if [[ -f /etc/blueberry-k3s/version ]]; then
+        BINARY_VERSION=$(cat /etc/blueberry-k3s/version)
+        echo "Image K3s version:  $BINARY_VERSION"
+    else
+        echo "Image K3s version:  (unknown)"
+    fi
+
+    if [[ -f /var/lib/rancher/k3s/.version ]]; then
+        STATE_VERSION=$(cat /var/lib/rancher/k3s/.version)
+        echo "State K3s version:  $STATE_VERSION"
+
+        if [[ "$BINARY_VERSION" == "$STATE_VERSION" ]]; then
+            echo "Version status:     ✓ Compatible"
+        else
+            echo "Version status:     ✗ MISMATCH (K3s will not start)"
+        fi
+    else
+        echo "State K3s version:  (not initialized)"
+    fi
+
+    echo ""
+
+    if command -v k3s &>/dev/null; then
+        echo "─── K3s Binary Info ────────────────────────────────"
+        k3s --version
+    fi
+    echo ""
+
+# Get K3s server token (for adding agents)
+k3s-get-token:
+    #!/usr/bin/bash
+    if [[ ! -f /var/lib/rancher/k3s/server/node-token ]]; then
+        echo "Error: K3s server token not found."
+        echo "This command only works on K3s server nodes."
+        exit 1
+    fi
+
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  K3s Server Token                              ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "Use this token when initializing K3s agents:"
+    echo ""
+    sudo cat /var/lib/rancher/k3s/server/node-token
+    echo ""
+
+# Reset K3s (DESTRUCTIVE - removes all K3s state)
+k3s-reset:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  K3s Reset (DESTRUCTIVE)                       ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "⚠️  WARNING: This will:"
+    echo "  - Stop K3s services"
+    echo "  - Disable K3s services"
+    echo "  - Delete all K3s state (/var/lib/rancher/k3s)"
+    echo "  - Delete all K3s configuration (/etc/rancher/k3s)"
+    echo "  - Remove all Kubernetes workloads"
+    echo "  - Remove all persistent volumes"
+    echo ""
+    echo "This operation is IRREVERSIBLE."
+    echo ""
+    read -p "Type 'RESET' to confirm: " confirm
+
+    if [[ "$confirm" != "RESET" ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    echo ""
+    echo "Resetting K3s..."
+
+    # Stop services
+    sudo systemctl stop k3s-server.service k3s-agent.service 2>/dev/null || true
+
+    # Disable services
+    sudo systemctl disable k3s-server.service k3s-agent.service 2>/dev/null || true
+
+    # Remove state (use k3s-killall.sh if available)
+    if [[ -x /usr/local/bin/k3s-killall.sh ]]; then
+        sudo /usr/local/bin/k3s-killall.sh || true
+    fi
+
+    # Remove directories
+    sudo rm -rf /var/lib/rancher/k3s
+    sudo rm -rf /etc/rancher/k3s
+    sudo rm -rf /etc/blueberry-k3s/k3s-*.env
+
+    echo ""
+    echo "✓ K3s reset complete."
+    echo ""
+    echo "K3s has been removed. You can reinitialize with:"
+    echo "  ujust k3s-init-server"
+    echo "  ujust k3s-init-agent"
+    echo ""
+
+# Show K3s logs (server or agent)
+k3s-logs:
+    #!/usr/bin/bash
+    if systemctl is-active k3s-server.service &>/dev/null; then
+        sudo journalctl -u k3s-server.service -f --no-hostname
+    elif systemctl is-active k3s-agent.service &>/dev/null; then
+        sudo journalctl -u k3s-agent.service -f --no-hostname
+    else
+        echo "K3s is not running."
+        exit 1
+    fi
