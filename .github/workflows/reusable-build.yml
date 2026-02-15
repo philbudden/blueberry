@@ -113,8 +113,8 @@ jobs:
             latest
           build-args: |
             FEDORA_VERSION=${{ needs.build-info.outputs.fedora_version }}
-            IMAGE_REGISTRY=${{ env.IMAGE_REGISTRY }}
             ARCH=aarch64
+            ${{ matrix.image_name == 'blueberry' && format('IMAGE_REGISTRY={0}', env.IMAGE_REGISTRY) || '' }}
           labels: |
             org.opencontainers.image.title=${{ matrix.image_name }}
             org.opencontainers.image.version=${{ needs.build-info.outputs.image_version }}
