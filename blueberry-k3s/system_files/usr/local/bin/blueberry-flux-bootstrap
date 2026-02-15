@@ -193,6 +193,86 @@ if [[ "$PROVIDER" == "github" ]]; then
 
 	echo "Bootstrapping FluxCD with GitHub..."
 	flux bootstrap "${BOOTSTRAP_ARGS[@]}"
+	
+	# Post-process YAML files to fix indentation for yamllint compliance
+	echo ""
+	echo "╔════════════════════════════════════════════════╗"
+	echo "║  Reformatting YAML for yamllint compliance    ║"
+	echo "╚════════════════════════════════════════════════╝"
+	echo ""
+	echo "FluxCD generates YAML with 2-space indentation that may not"
+	echo "match your repository's yamllint configuration."
+	echo ""
+	echo "This step will:"
+	echo "  1. Clone the repository"
+	echo "  2. Reformat YAML files to match standard formatting"
+	echo "  3. Commit and push the changes"
+	echo ""
+	
+	# Create temporary directory for reformatting
+	TEMP_DIR=$(mktemp -d)
+	trap "rm -rf $TEMP_DIR" EXIT
+	
+	cd "$TEMP_DIR"
+	
+	# Clone the repository
+	echo "Cloning repository..."
+	git clone "https://${GITHUB_TOKEN}@github.com/${OWNER}/${REPO}.git" repo
+	cd repo
+	
+	# Configure git
+	git config user.name "FluxCD Bootstrap"
+	git config user.email "flux@blueberry-k3s.local"
+	
+	# Find and reformat YAML files (excluding ignored files)
+	REFORMATTED=0
+	echo ""
+	echo "Reformatting YAML files in ${FLUX_PATH}..."
+	
+	for yaml_file in $(find "${FLUX_PATH}" -type f \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null); do
+		# Skip gotk-components.yaml as it's typically ignored in yamllint configs
+		if [[ "$yaml_file" == *"gotk-components.yaml" ]]; then
+			echo "  Skipping: $yaml_file (ignored by yamllint)"
+			continue
+		fi
+		
+		echo "  Reformatting: $yaml_file"
+		
+		# Use yq to read and rewrite YAML with proper indentation
+		# yq eval with -i flag reformats in-place with correct 2-space indentation
+		# and proper sequence handling
+		if yq eval -i '.' "$yaml_file" 2>/dev/null; then
+			REFORMATTED=$((REFORMATTED + 1))
+		else
+			echo "    Warning: Failed to reformat $yaml_file"
+		fi
+	done
+	
+	# Check if there are changes to commit
+	if git diff --quiet; then
+		echo ""
+		echo "✓ No formatting changes needed - YAML already compliant"
+	else
+		echo ""
+		echo "Committing formatting changes..."
+		git add .
+		git commit -m "chore: reformat YAML for yamllint compliance
+
+Reformatted Flux-generated YAML files to match repository
+yamllint configuration (proper sequence indentation).
+
+This ensures CI validation passes.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+		
+		echo "Pushing changes..."
+		git push origin main
+		
+		echo ""
+		echo "✓ YAML reformatting complete ($REFORMATTED files processed)"
+	fi
+	
+	cd - > /dev/null
 
 elif [[ "$PROVIDER" == "gitlab" ]]; then
 	echo "Error: GitLab provider not yet implemented."

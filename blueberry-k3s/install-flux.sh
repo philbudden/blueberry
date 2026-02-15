@@ -24,6 +24,22 @@ chmod 755 /usr/local/bin/flux
 # Verify installation
 /usr/local/bin/flux --version
 
+### Install yq for YAML Processing
+# yq is used to reformat Flux-generated YAML to match repository linting standards
+YQ_VERSION="v4.44.6"
+
+echo "Installing yq ${YQ_VERSION} for aarch64..."
+
+# Download yq binary
+curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_arm64" \
+    -o /usr/local/bin/yq
+
+# Set permissions
+chmod 755 /usr/local/bin/yq
+
+# Verify installation
+/usr/local/bin/yq --version
+
 ### Record installed version
 # This file tracks the FluxCD CLI version installed in the image
 mkdir -p /etc/blueberry-k3s
