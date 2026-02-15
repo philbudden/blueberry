@@ -129,9 +129,9 @@ jobs:
         if: matrix.image_name == 'blueberry-minimal'
         run: |
           # Tag blueberry-minimal with full registry path so blueberry build can find it locally
-          # Use 'latest' tag which is guaranteed to exist after build
+          # buildah-build creates images with localhost/ prefix
           sudo podman tag \
-            ${{ steps.env.outputs.image_name }}:latest \
+            localhost/${{ steps.env.outputs.image_name }}:latest \
             ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
 
       - name: Push image to GHCR
