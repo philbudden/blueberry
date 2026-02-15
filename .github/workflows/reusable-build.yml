@@ -52,6 +52,7 @@ jobs:
       packages: write
       id-token: write
     strategy:
+      max-parallel: 1  # Build sequentially to ensure blueberry-minimal completes before blueberry
       fail-fast: false
       matrix:
         image_name:
