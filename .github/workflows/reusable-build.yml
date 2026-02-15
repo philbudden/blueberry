@@ -128,7 +128,7 @@ jobs:
         if: matrix.image_name == 'blueberry-minimal'
         run: |
           echo "=== Listing all images ==="
-          sudo podman images
+          sudo buildah images
           echo "=== Build outputs ==="
           echo "Image: ${{ steps.build.outputs.image }}"
           echo "Tags: ${{ steps.build.outputs.tags }}"
@@ -139,8 +139,8 @@ jobs:
           # Tag blueberry-minimal with GHCR path so blueberry Containerfile finds it locally
           # When Containerfile does FROM ghcr.io/.../blueberry-minimal:44, buildah checks
           # local storage first before trying to pull, so this will be used
-          sudo podman tag \
-            ${{ steps.build.outputs.image }}:latest \
+          sudo buildah tag \
+            ${{ steps.env.outputs.image_name }}:latest \
             ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
 
       - name: Push image to GHCR
