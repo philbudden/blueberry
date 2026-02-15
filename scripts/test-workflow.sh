@@ -72,7 +72,8 @@ cat >.github/act-event.json <<EOF
 EOF
 
 # Run act
-act "${EVENT}" "${ACT_FLAGS[@]}" "$@"
+# Note: Don't pass $@ here as we already consumed the first 2 args
+act "${EVENT}" "${ACT_FLAGS[@]}"
 
 # Cleanup
 rm -f .github/act-event.json
