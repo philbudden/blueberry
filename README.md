@@ -2,9 +2,17 @@
 
 Blueberry aims to be a light-weight server OS for aarch64-SBC's like the Raspberry Pi 4, heavily influenced by [Universal Blue](https://universal-blue.org/), in particular [uCore](https://github.com/ublue-os/ucore), but built on Fedora IOT. Like uCore, it's an opinionated, "batteries included" custom image, built daily with some common tools added in.
 
-At present, Blueberry builds a single aarch64 image: **blueberry-minimal**. Based on [uCore minimal](https://github.com/ublue-os/ucore?tab=readme-ov-file#ucore-minimal), it is suitable for running containerized workloads on aarch64 systems supported by [Fedora IOT](https://docs.fedoraproject.org/en-US/iot/reference-platforms/). Like its influencer, this image tries to stay lightweight but functional:
+Blueberry provides a layered image family for different use cases:
 
-## Blueberry Minimal
+- **blueberry-minimal**: Minimal container host
+- **blueberry**: Storage primitives and observability (builds on minimal)
+- **blueberry-k3s**: Lightweight Kubernetes (coming soon)
+
+## Image Variants
+
+### Blueberry Minimal
+
+Based on [uCore minimal](https://github.com/ublue-os/ucore?tab=readme-ov-file#ucore-minimal), suitable for running containerized workloads on aarch64 systems supported by [Fedora IOT](https://docs.fedoraproject.org/en-US/iot/reference-platforms/).
 
 - Starts with a [Fedora IOT image](https://quay.io/repository/fedora/fedora-iot)
 - Adds the following:
@@ -18,17 +26,40 @@ At present, Blueberry builds a single aarch64 image: **blueberry-minimal**. Base
 - Enables staging of automatic system updates via rpm-ostreed
 - Enables password based SSH auth (required for locally running cockpit web interface)
 
-### Architecture & Installation
-
-- **Architecture**: aarch64 only (for SBCs like Raspberry Pi 4)
-- **Installation method**: Rebase from existing Fedora IoT installation only
-- **Not supported**: Fresh installations, ISO/disk images, x86_64 architecture
-
-To rebase an existing Fedora IoT system to Blueberry:
+**To rebase to blueberry-minimal:**
 ```bash
 rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry-minimal:latest
 systemctl reboot
 ```
+
+### Blueberry
+
+Builds on **blueberry-minimal** with storage primitives and observability for NAS workloads and general-purpose server use.
+
+Adds:
+- **Storage primitives**:
+  - `smartctl` - SMART disk health monitoring
+  - `hdparm` - Disk parameter management and benchmarking
+  - `cockpit-storaged` - Web UI for storage management
+  - `lvm2` - LVM volume management
+  - `mdadm` - Software RAID (RAID1 mirroring recommended for redundancy; RAID0 available but not recommended for USB storage)
+  - Filesystem tools: `xfsprogs`, `dosfstools`, `exfatprogs`
+- **Observability**:
+  - `pcp-zeroconf` - Performance Co-Pilot with zero-config mode
+
+**Design philosophy**: This image provides storage *primitives*, not policy. Stateful services like SMB, NFS, and backup tools should run in containers on top of this base.
+
+**To rebase to blueberry:**
+```bash
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry:latest
+systemctl reboot
+```
+
+## Architecture & Installation
+
+- **Architecture**: aarch64 only (for SBCs like Raspberry Pi 4)
+- **Installation method**: Rebase from existing Fedora IoT installation only
+- **Not supported**: Fresh installations, ISO/disk images, x86_64 architecture
 
 > [!IMPORTANT]
 > Per [cockpit's instructions](https://cockpit-project.org/running.html#coreos) the cockpit-ws RPM is **not** installed, rather it is provided as a pre-defined systemd service which runs a podman container.
@@ -47,7 +78,7 @@ systemctl reboot
 The repository follows [uCore's](https://github.com/ublue-os/ucore) organizational conventions:
 
 ```
-blueberry-minimal/                  # Main image source directory
+blueberry-minimal/                  # Minimal image source directory
 ├── Containerfile                   # Image build definition
 ├── install-blueberry-minimal.sh    # Package installation script
 ├── cleanup.sh                      # Image cleanup script
@@ -55,13 +86,22 @@ blueberry-minimal/                  # Main image source directory
     ├── etc/                        # System configuration files
     │   └── ssh/sshd_config.d/      # SSH configuration
     └── usr/lib/systemd/system/     # Systemd unit files
+
+blueberry/                          # Storage + observability image (builds from blueberry-minimal)
+├── Containerfile                   # Image build definition
+├── install-blueberry.sh            # Package installation script
+├── cleanup.sh                      # Image cleanup script
+└── system_files/                   # System configuration hierarchy
+    ├── etc/                        # System configuration files
+    └── usr/                        # Additional system files
 ```
 
 This structure:
 - Separates build logic from system configuration
 - Mirrors the Linux filesystem hierarchy for clarity
-- Enables clean multi-image support for future variants (e.g., blueberry-desktop, blueberry-k3s)
+- Enables clean multi-image support with layered variants
 - Maintains compatibility with uCore patterns
+- Provides clear separation: `blueberry-minimal` → `blueberry` → `blueberry-k3s` (future)
 
 ## Build & Release
 

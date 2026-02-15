@@ -127,7 +127,6 @@ Allowed:
 - Disk tooling (smart tools, filesystem utilities)
 - RAID primitives (if justified)
 - Mount support
-- udev rules if necessary
 - PCP
 
 Not allowed:

@@ -8,12 +8,14 @@ on:
       - main
     paths:
       - blueberry-minimal/**
+      - blueberry/**
       - .github/workflows/**
   pull_request:
     branches:
       - main
     paths:
       - blueberry-minimal/**
+      - blueberry/**
       - .github/workflows/**
   workflow_dispatch:
 
