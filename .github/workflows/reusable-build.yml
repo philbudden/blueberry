@@ -147,7 +147,7 @@ jobs:
           IMG="${{ steps.env.outputs.image_name }}"
           REGISTRY="${{ env.IMAGE_REGISTRY }}"
           FEDORA_VER="${{ needs.build-info.outputs.fedora_version }}"
-          sudo buildah tag "${IMG}":latest "${REGISTRY}/${IMG}:${FEDORA_VER}"
+          sudo buildah tag "${IMG}:latest" "${REGISTRY}/${IMG}:${FEDORA_VER}"
 
       - name: Push image to GHCR
         id: push
