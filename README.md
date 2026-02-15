@@ -2,9 +2,21 @@
 
 Blueberry aims to be a light-weight server OS for aarch64-SBC's like the Raspberry Pi 4, heavily influenced by [Universal Blue](https://universal-blue.org/), in particular [uCore](https://github.com/ublue-os/ucore), but built on Fedora IOT. Like uCore, it's an opinionated, "batteries included" custom image, built daily with some common tools added in.
 
-At present, Blueberry builds a single aarch64 image: **blueberry-minimal**. Based on [uCore minimal](https://github.com/ublue-os/ucore?tab=readme-ov-file#ucore-minimal), it is suitable for running containerized workloads on aarch64 systems supported by [Fedora IOT](https://docs.fedoraproject.org/en-US/iot/reference-platforms/). Like its influencer, this image tries to stay lightweight but functional:
+Blueberry provides two aarch64 images with a clear layering model:
+
+## Image Family
+
+```
+blueberry-minimal (base container host)
+        ↓
+blueberry (storage primitives + observability)
+        ↓
+blueberry-k3s (planned: lightweight Kubernetes)
+```
 
 ## Blueberry Minimal
+
+The foundation image for containerized workloads on aarch64 SBCs. Based on [uCore minimal](https://github.com/ublue-os/ucore?tab=readme-ov-file#ucore-minimal), suitable for running containers on systems supported by [Fedora IOT](https://docs.fedoraproject.org/en-US/iot/reference-platforms/).
 
 - Starts with a [Fedora IOT image](https://quay.io/repository/fedora/fedora-iot)
 - Adds the following:
@@ -18,13 +30,66 @@ At present, Blueberry builds a single aarch64 image: **blueberry-minimal**. Base
 - Enables staging of automatic system updates via rpm-ostreed
 - Enables password based SSH auth (required for locally running cockpit web interface)
 
-### Architecture & Installation
+**Use blueberry-minimal when**: You need a clean, minimal atomic container host without storage or monitoring tooling.
+
+### Installation (blueberry-minimal)
+
+To rebase an existing Fedora IoT system to Blueberry Minimal:
+```bash
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry-minimal:latest
+systemctl reboot
+```
+
+## Blueberry
+
+Builds on `blueberry-minimal` with storage primitives and observability for edge NAS workloads and Kubernetes nodes.
+
+**Additional packages:**
+
+**Storage Primitives:**
+- `smartmontools` - Disk health monitoring (SMART)
+- `hdparm` - Low-level disk parameter management
+- `mdadm` - Software RAID for multi-disk resilience
+- `cockpit-storaged` - Cockpit storage management UI
+
+**Observability:**
+- `pcp-zeroconf` - Performance Co-Pilot monitoring
+
+**Design Philosophy:**
+- Provides **primitives**, not policy
+- Storage services (SMB, NFS, SnapRAID, MergerFS) run in **containers**, not on the host
+- Lightweight monitoring suitable for SBC constraints (4-8GB RAM, USB storage)
+- No ZFS (inappropriate for SBC/USB storage environments)
+
+**Use blueberry when**: You need storage primitives for containerized NAS workloads, Kubernetes persistent volumes, or edge storage nodes.
+
+### Installation (blueberry)
+
+To rebase an existing Fedora IoT system to Blueberry:
+```bash
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry:latest
+systemctl reboot
+```
+
+### Package Rationale
+
+**Why mdadm (Software RAID)?**
+
+While USB storage is the primary target for SBC environments, multi-USB RAID configurations are legitimate and useful for:
+- Data redundancy on edge nodes (RAID1 mirroring)
+- Kubernetes persistent volume backing with resilience
+- Containerized NAS services requiring underlying RAID
+- Lightweight alternative to ZFS (which is too heavy for SBC/USB constraints)
+
+`mdadm` is the only viable RAID primitive for this environment—no datacenter assumptions, minimal overhead, suitable for USB-connected drives.
+
+## General Architecture & Installation
 
 - **Architecture**: aarch64 only (for SBCs like Raspberry Pi 4)
 - **Installation method**: Rebase from existing Fedora IoT installation only
 - **Not supported**: Fresh installations, ISO/disk images, x86_64 architecture
 
-To rebase an existing Fedora IoT system to Blueberry:
+To rebase an existing Fedora IoT system to Blueberry Minimal:
 ```bash
 rpm-ostree rebase ostree-unverified-registry:ghcr.io/philbudden/blueberry-minimal:latest
 systemctl reboot
@@ -47,7 +112,7 @@ systemctl reboot
 The repository follows [uCore's](https://github.com/ublue-os/ucore) organizational conventions:
 
 ```
-blueberry-minimal/                  # Main image source directory
+blueberry-minimal/                  # Minimal container host image
 ├── Containerfile                   # Image build definition
 ├── install-blueberry-minimal.sh    # Package installation script
 ├── cleanup.sh                      # Image cleanup script
@@ -55,12 +120,18 @@ blueberry-minimal/                  # Main image source directory
     ├── etc/                        # System configuration files
     │   └── ssh/sshd_config.d/      # SSH configuration
     └── usr/lib/systemd/system/     # Systemd unit files
+
+blueberry/                          # Storage + observability image
+├── Containerfile                   # Builds FROM blueberry-minimal
+├── install-blueberry.sh            # Additional package installation
+├── cleanup.sh                      # Image cleanup script
+└── system_files/                   # Additional config (if needed)
 ```
 
 This structure:
 - Separates build logic from system configuration
 - Mirrors the Linux filesystem hierarchy for clarity
-- Enables clean multi-image support for future variants (e.g., blueberry-desktop, blueberry-k3s)
+- Enables clean multi-image support with layered variants (blueberry-minimal → blueberry → blueberry-k3s)
 - Maintains compatibility with uCore patterns
 
 ## Build & Release
@@ -71,6 +142,7 @@ Blueberry follows uCore's build workflow conventions:
 - **Build schedule**: Daily builds at 2:30 UTC (Fedora 44) and 2:35 UTC (Fedora 43)
 - **Image registry**: GitHub Container Registry (GHCR)
 - **Image signing**: All published images are signed with Cosign
+- **Build order**: Images build sequentially to respect dependencies (blueberry-minimal → blueberry)
 - **Tags**:
   - `latest` - Most recent build of the default version (Fedora 44)
   - `YYYYMMDD` - Daily dated builds (e.g., `20260214`)
