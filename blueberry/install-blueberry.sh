@@ -14,7 +14,7 @@ dnf5 install -y \
     hdparm \
     lvm2 \
     mdadm \
-    smartctl \
+    smartmontools \
     xfsprogs
 
 # Observability - Performance Co-Pilot with zero-config mode
