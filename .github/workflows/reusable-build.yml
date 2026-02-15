@@ -114,7 +114,6 @@ jobs:
           build-args: |
             FEDORA_VERSION=${{ needs.build-info.outputs.fedora_version }}
             ARCH=aarch64
-            ${{ matrix.image_name == 'blueberry' && 'IMAGE_REGISTRY=localhost' || '' }}
           labels: |
             org.opencontainers.image.title=${{ matrix.image_name }}
             org.opencontainers.image.version=${{ needs.build-info.outputs.image_version }}
@@ -137,11 +136,12 @@ jobs:
       - name: Tag image with registry prefix for local use
         if: matrix.image_name == 'blueberry-minimal'
         run: |
-          # Tag blueberry-minimal so the next build can find it
-          # We use 'latest' as source since that's guaranteed to exist
+          # Tag blueberry-minimal with GHCR path so blueberry Containerfile finds it locally
+          # When Containerfile does FROM ghcr.io/.../blueberry-minimal:44, buildah checks
+          # local storage first before trying to pull, so this will be used
           sudo podman tag \
             ${{ steps.build.outputs.image }}:latest \
-            localhost/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
+            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ needs.build-info.outputs.fedora_version }}
 
       - name: Push image to GHCR
         id: push
