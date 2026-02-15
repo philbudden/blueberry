@@ -43,14 +43,20 @@ jobs:
           
           echo "Fedora IoT version: ${IMAGE_VERSION}"
 
-  build-minimal:
-    name: Build blueberry-minimal
+  build-images:
+    name: Build Images
     runs-on: ubuntu-24.04-arm
     needs: build-info
     permissions:
       contents: read
       packages: write
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image_name:
+          - blueberry-minimal
+          - blueberry
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -59,6 +65,10 @@ jobs:
         id: env
         run: |
           set -euo pipefail
+          
+          # Lowercase the registry and image name
+          IMAGE_NAME=$(echo "${{ matrix.image_name }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           
           # Set build date
           BUILD_DATE=$(date -u +%Y%m%d)
@@ -78,117 +88,23 @@ jobs:
           attempt_limit: 3
           attempt_delay: 15000
           command: |
+            # Pull Fedora IoT base (always needed for blueberry-minimal)
             sudo podman pull quay.io/fedora/fedora-iot:${{ needs.build-info.outputs.fedora_version }}-aarch64
+            
+            # For blueberry build, also pull blueberry-minimal if it exists in registry
+            # This allows rebuilding blueberry without rebuilding minimal
+            if [[ "${{ matrix.image_name }}" == "blueberry" ]]; then
+              sudo podman pull ${{ env.IMAGE_REGISTRY }}/blueberry-minimal:${{ needs.build-info.outputs.fedora_version }} || true
+            fi
 
       - name: Build image
         id: build
         uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
         with:
           containerfiles: |
-            ./blueberry-minimal/Containerfile
-          context: ./blueberry-minimal
-          image: blueberry-minimal
-          tags: |
-            ${{ needs.build-info.outputs.pr_prefix }}${{ steps.env.outputs.sha_short }}
-            ${{ steps.env.outputs.build_date }}
-            ${{ needs.build-info.outputs.fedora_version }}
-            latest
-          build-args: |
-            FEDORA_VERSION=${{ needs.build-info.outputs.fedora_version }}
-            ARCH=aarch64
-          labels: |
-            org.opencontainers.image.title=blueberry-minimal
-            org.opencontainers.image.version=${{ needs.build-info.outputs.image_version }}
-            org.opencontainers.image.description=Minimal Fedora IoT-based server image for aarch64 SBCs
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ steps.env.outputs.build_date }}
-            containers.bootc=1
-          oci: false
-
-      - name: Push image to GHCR
-        id: push
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          image: blueberry-minimal
-          tags: |
-            ${{ steps.env.outputs.build_date }}
-            ${{ needs.build-info.outputs.fedora_version }}
-            latest
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to GHCR for signing
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install cosign
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
-
-      - name: Sign container image
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        run: |
-          set -euo pipefail
-          
-          # Sign using digest from push step output
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY \
-            ${{ env.IMAGE_REGISTRY }}/blueberry-minimal@${{ steps.push.outputs.digest }}
-        env:
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-
-  build-blueberry:
-    name: Build blueberry
-    runs-on: ubuntu-24.04-arm
-    needs: [build-info, build-minimal]
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - name: Set up environment variables
-        id: env
-        run: |
-          set -euo pipefail
-          
-          # Set build date
-          BUILD_DATE=$(date -u +%Y%m%d)
-          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
-          
-          # Set short SHA
-          if [[ -z "$(git status -s)" ]]; then
-            SHA_SHORT=$(git rev-parse --short HEAD)
-          else
-            SHA_SHORT="dirty"
-          fi
-          echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
-
-      - name: Pull blueberry-minimal base image
-        uses: Wandalen/wretry.action@6feedb7dedadeb826de0f45ff482b53b379a7844 # v3.5.0
-        with:
-          attempt_limit: 3
-          attempt_delay: 15000
-          command: |
-            sudo podman pull ${{ env.IMAGE_REGISTRY }}/blueberry-minimal:${{ needs.build-info.outputs.fedora_version }}
-
-      - name: Build image
-        id: build
-        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
-        with:
-          containerfiles: |
-            ./blueberry/Containerfile
-          context: ./blueberry
-          image: blueberry
+            ./${{ matrix.image_name }}/Containerfile
+          context: ./${{ matrix.image_name }}
+          image: ${{ steps.env.outputs.image_name }}
           tags: |
             ${{ needs.build-info.outputs.pr_prefix }}${{ steps.env.outputs.sha_short }}
             ${{ steps.env.outputs.build_date }}
@@ -199,9 +115,9 @@ jobs:
             IMAGE_REGISTRY=${{ env.IMAGE_REGISTRY }}
             ARCH=aarch64
           labels: |
-            org.opencontainers.image.title=blueberry
+            org.opencontainers.image.title=${{ matrix.image_name }}
             org.opencontainers.image.version=${{ needs.build-info.outputs.image_version }}
-            org.opencontainers.image.description=Fedora IoT-based image with storage primitives and observability for aarch64 SBCs
+            org.opencontainers.image.description=Fedora IoT-based image for aarch64 SBCs
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ steps.env.outputs.build_date }}
@@ -214,7 +130,7 @@ jobs:
         uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
-          image: blueberry
+          image: ${{ steps.env.outputs.image_name }}
           tags: |
             ${{ steps.env.outputs.build_date }}
             ${{ needs.build-info.outputs.fedora_version }}
@@ -241,7 +157,7 @@ jobs:
           
           # Sign using digest from push step output
           cosign sign -y --key env://COSIGN_PRIVATE_KEY \
-            ${{ env.IMAGE_REGISTRY }}/blueberry@${{ steps.push.outputs.digest }}
+            ${{ env.IMAGE_REGISTRY }}/${{ steps.env.outputs.image_name }}@${{ steps.push.outputs.digest }}
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
