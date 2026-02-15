@@ -2,6 +2,22 @@
   "name": "blueberry",
   "image": "mcr.microsoft.com/devcontainers/python:3",
   "features": {
-    "ghcr.io/rio/features/chezmoi:1": {}
+    "ghcr.io/rio/features/chezmoi:1": {},
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false,
+      "installDockerBuildx": true,
+      "version": "latest"
+    }
   },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "redhat.vscode-yaml"
+      ]
+    }
+  }
 }

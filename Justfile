@@ -11,6 +11,43 @@ alias run-vm := run-vm-qcow2
 default:
     @just --list
 
+# ========================================
+# CI/CD Testing Recipes
+# ========================================
+
+# Validate GitHub Actions workflows (syntax & linting)
+[group('CI Testing')]
+validate-workflows:
+    @./scripts/validate-workflows.sh
+
+# Test a GitHub Actions workflow locally using act (dry-run by default)
+[group('CI Testing')]
+test-workflow workflow event="push":
+    @./scripts/test-workflow.sh {{ workflow }} {{ event }}
+
+# Test a GitHub Actions workflow with full execution
+[group('CI Testing')]
+test-workflow-run workflow event="push":
+    @ACT_RUN=1 ./scripts/test-workflow.sh {{ workflow }} {{ event }}
+
+# Test building an image variant locally
+[group('CI Testing')]
+test-build variant tag="test":
+    @./scripts/test-build.sh {{ variant }} {{ tag }}
+
+# Test building all variants in sequence (mimics CI)
+[group('CI Testing')]
+test-build-all tag="test":
+    @./scripts/test-build.sh blueberry-minimal {{ tag }}
+    @./scripts/test-build.sh blueberry {{ tag }}
+
+# Run all pre-push validations
+[group('CI Testing')]
+pre-push: validate-workflows lint
+    @echo "✓ All pre-push checks passed"
+
+# ========================================
+
 # Check Just Syntax
 [group('Just')]
 check:

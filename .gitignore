@@ -2,3 +2,7 @@ cosign.key
 _build_*
 output
 _build-*/**
+
+# Testing artifacts
+.github/act-event.json
+.actrc.local

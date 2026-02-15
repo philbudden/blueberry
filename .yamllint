@@ -1,0 +1,20 @@
+---
+# yamllint configuration for GitHub Actions workflows
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    spaces: 2
+    indent-sequences: true
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+
+ignore: |
+  .github/
+  !.github/workflows/

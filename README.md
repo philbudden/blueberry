@@ -116,3 +116,33 @@ Blueberry follows uCore's build workflow conventions:
   - `YYYYMMDD` - Daily dated builds (e.g., `20260214`)
   
 Images are built only for **aarch64** architecture and are intended for **rebase-only** installation on existing Fedora IoT systems.
+
+## Development & Testing
+
+Blueberry includes local testing infrastructure for validating workflows and builds before pushing to GitHub.
+
+**Quick validation:**
+```bash
+just pre-push        # Validate workflows and shell scripts
+```
+
+**Test workflows locally:**
+```bash
+just test-workflow build-43.yml     # Dry-run simulation
+just test-workflow-run build-43.yml # Full execution
+```
+
+**Test image builds:**
+```bash
+just test-build blueberry-minimal   # Single variant
+just test-build-all                 # Full dependency chain
+```
+
+See [docs/TESTING.md](docs/TESTING.md) for detailed testing documentation.
+
+**Development environment:**
+- Uses devcontainer with Docker socket binding
+- Includes `act` for GitHub Actions simulation
+- Includes `actionlint` and `yamllint` for validation
+- Supports ARM64 emulation via QEMU (slower, for syntax testing)
+- Full ARM64 builds use GitHub Actions native runners

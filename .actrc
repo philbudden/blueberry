@@ -1,0 +1,20 @@
+# act configuration for local GitHub Actions testing
+# See: https://nektosact.com/usage/index.html
+
+# Use catthehacker's Ubuntu images (closer to GitHub's runners)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-24.04=catthehacker/ubuntu:act-24.04
+-P ubuntu-24.04-arm=catthehacker/ubuntu:act-24.04
+
+# Environment variables
+--env ACTIONS_RUNNER_DEBUG=false
+--env RUNNER_DEBUG=false
+
+# Bind the Docker socket for nested container operations
+--container-daemon-socket /var/run/docker.sock
+
+# Reuse containers to speed up repeated runs (comment out for clean state)
+# --reuse
+
+# Verbose output (uncomment for debugging)
+# --verbose
