@@ -151,6 +151,11 @@ systemctl reboot
 ujust k3s-init-server
 ```
 
+**Enable kubectl without sudo:**
+```bash
+ujust k3s-kubeconfig-user  # Copy kubeconfig to ~/.kube/config
+```
+
 **Initialize as agent (worker node):**
 ```bash
 ujust k3s-init-agent

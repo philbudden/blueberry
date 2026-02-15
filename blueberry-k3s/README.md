@@ -171,10 +171,11 @@ After reset, you can reinitialize with `ujust k3s-init-server` or `ujust k3s-ini
 
 ```bash
 # K3s Commands
-ujust k3s-status       # Service status, cluster info
-ujust k3s-version      # Binary and state versions
-ujust k3s-logs         # Follow K3s logs
-ujust k3s-get-token    # Get server token (server only)
+ujust k3s-status          # Service status, cluster info
+ujust k3s-version         # Binary and state versions
+ujust k3s-logs            # Follow K3s logs
+ujust k3s-get-token       # Get server token (server only)
+ujust k3s-kubeconfig-user # Enable kubectl without sudo
 
 # FluxCD Commands
 ujust flux-status      # Check FluxCD installation
@@ -427,6 +428,16 @@ This means kubectl cannot find the K3s kubeconfig. The bootstrap script sets `KU
 ujust k3s-status        # Ensure K3s is running
 sudo kubectl get nodes  # Verify kubeconfig access
 ```
+
+**kubectl requires sudo**
+
+By default, K3s kubeconfig is root-only (`/etc/rancher/k3s/k3s.yaml`). To enable kubectl for your user without sudo:
+
+```bash
+ujust k3s-kubeconfig-user
+```
+
+This copies the kubeconfig to `~/.kube/config` with proper ownership.
 
 **Error: "GitHub token file not found"**
 

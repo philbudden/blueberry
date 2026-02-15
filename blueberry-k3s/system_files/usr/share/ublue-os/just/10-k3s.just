@@ -134,6 +134,52 @@ k3s-get-token:
     sudo cat /var/lib/rancher/k3s/server/node-token
     echo ""
 
+# Enable kubectl access for current user (without sudo)
+k3s-kubeconfig-user:
+    #!/usr/bin/bash
+    echo "╔════════════════════════════════════════════════╗"
+    echo "║  Enable kubectl for Current User              ║"
+    echo "╚════════════════════════════════════════════════╝"
+    echo ""
+    echo "This will copy the K3s kubeconfig to your user directory."
+    echo ""
+    echo "Target: ~/.kube/config"
+    echo "Source: /etc/rancher/k3s/k3s.yaml"
+    echo ""
+    echo "⚠️  WARNING: This grants cluster admin access to your user."
+    echo ""
+    read -p "Press Enter to continue, or Ctrl+C to abort..."
+    echo ""
+
+    # Check if K3s is initialized
+    if [[ ! -f /etc/rancher/k3s/k3s.yaml ]]; then
+        echo "Error: K3s kubeconfig not found."
+        echo "Initialize K3s first: ujust k3s-init-server"
+        exit 1
+    fi
+
+    # Create .kube directory
+    mkdir -p ~/.kube
+
+    # Copy kubeconfig
+    sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+
+    # Set ownership to current user
+    sudo chown $USER:$USER ~/.kube/config
+
+    # Set secure permissions
+    chmod 600 ~/.kube/config
+
+    echo "✓ Kubeconfig copied to ~/.kube/config"
+    echo ""
+    echo "You can now run kubectl without sudo:"
+    echo "  kubectl get nodes"
+    echo "  kubectl get pods -A"
+    echo ""
+    echo "Note: The kubeconfig will need to be updated after K3s upgrades."
+    echo "      Re-run this command if kubectl stops working after an upgrade."
+    echo ""
+
 # Reset K3s (DESTRUCTIVE - removes all K3s state)
 k3s-reset:
     #!/usr/bin/bash
