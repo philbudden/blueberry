@@ -144,10 +144,15 @@ jobs:
           # Tag blueberry-minimal with GHCR path so blueberry Containerfile finds it locally
           # When Containerfile does FROM ghcr.io/.../blueberry-minimal:44, buildah checks
           # local storage first before trying to pull, so this will be used
-          IMG="${{ steps.env.outputs.image_name }}"
+          # Use the actual image:tag output from the build step
+          BUILT_IMAGE="${{ steps.build.outputs.image }}:${{ steps.build.outputs.tags }}"
           REGISTRY="${{ env.IMAGE_REGISTRY }}"
+          IMG="${{ steps.env.outputs.image_name }}"
           FEDORA_VER="${{ needs.build-info.outputs.fedora_version }}"
-          sudo buildah tag "${IMG}:latest" "${REGISTRY}/${IMG}:${FEDORA_VER}"
+          
+          # The build outputs multiple tags separated by newlines, use latest
+          BUILT_IMAGE="${{ steps.build.outputs.image }}:latest"
+          sudo buildah tag "${BUILT_IMAGE}" "${REGISTRY}/${IMG}:${FEDORA_VER}"
 
       - name: Push image to GHCR
         id: push
