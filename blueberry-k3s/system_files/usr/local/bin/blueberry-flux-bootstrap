@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# Set K3s kubeconfig path
+# K3s stores kubeconfig at /etc/rancher/k3s/k3s.yaml (requires root access)
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
 # Usage information
 usage() {
 	cat <<EOF
@@ -120,6 +124,21 @@ if [[ "$PROVIDER" == "github" ]]; then
 		echo "Example:"
 		echo "  echo 'ghp_your_token_here' > ~/.github-token"
 		echo "  chmod 600 ~/.github-token"
+		echo ""
+		echo "NOTE: If running via 'ujust', the file must be readable by root."
+		echo "Consider placing the token in a root-accessible location:"
+		echo "  sudo mkdir -p /etc/blueberry-k3s/secrets"
+		echo "  echo 'ghp_your_token_here' | sudo tee /etc/blueberry-k3s/secrets/github-token"
+		echo "  sudo chmod 600 /etc/blueberry-k3s/secrets/github-token"
+		exit 1
+	fi
+	
+	# Verify token file is readable (important when run via sudo)
+	if [[ ! -r "$TOKEN_FILE" ]]; then
+		echo "Error: Cannot read token file: $TOKEN_FILE"
+		echo ""
+		echo "The file exists but is not readable by the current user."
+		echo "If running via sudo, ensure the file is root-readable."
 		exit 1
 	fi
 fi

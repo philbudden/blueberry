@@ -196,13 +196,20 @@ FluxCD is pre-installed (CLI only) for GitOps automation. Bootstrap is explicit 
 ### Bootstrap FluxCD
 
 ```bash
-# Create GitHub token file
-echo 'ghp_your_token_here' > ~/.github-token
-chmod 600 ~/.github-token
+# Create GitHub token file (root-readable location recommended)
+sudo mkdir -p /etc/blueberry-k3s/secrets
+echo 'ghp_your_token_here' | sudo tee /etc/blueberry-k3s/secrets/github-token
+sudo chmod 600 /etc/blueberry-k3s/secrets/github-token
 
 # Bootstrap FluxCD (interactive)
 ujust flux-bootstrap-github
 ```
+
+**Token File Locations**:
+- **Recommended**: `/etc/blueberry-k3s/secrets/github-token` (root-readable, survives user changes)
+- **Alternative**: `~/.github-token` (user home directory)
+
+**Important**: The bootstrap script runs with `sudo` to access the K3s kubeconfig (`/etc/rancher/k3s/k3s.yaml`). Ensure the token file is readable by root.
 
 During bootstrap, you'll provide:
 - GitHub owner (username or organization)
@@ -412,15 +419,37 @@ cat /var/lib/rancher/k3s/.version           # K3s state version
 
 ### FluxCD bootstrap fails
 
-Check prerequisites:
+**Error: "dial tcp [::1]:8080: connect: connection refused"**
+
+This means kubectl cannot find the K3s kubeconfig. The bootstrap script sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml` automatically, but verify K3s is running:
+
 ```bash
 ujust k3s-status        # Ensure K3s is running
-flux check --pre        # Run pre-flight checks
+sudo kubectl get nodes  # Verify kubeconfig access
 ```
+
+**Error: "GitHub token file not found"**
+
+Ensure the token file is readable by root (bootstrap runs with sudo):
+
+```bash
+# Recommended: Use root-accessible location
+sudo mkdir -p /etc/blueberry-k3s/secrets
+echo 'ghp_your_token_here' | sudo tee /etc/blueberry-k3s/secrets/github-token
+sudo chmod 600 /etc/blueberry-k3s/secrets/github-token
+
+# Then specify this path during bootstrap
+```
+
+**Error: "flux 2.4.0 <2.7.5 (new CLI version is available)"**
+
+This is a warning, not an error. FluxCD v2.4.0 is pinned in the image. The controllers will auto-upgrade to match the manifests in your Git repository. This is expected behavior.
 
 Verify GitHub token:
 ```bash
 cat ~/.github-token     # Token should start with 'ghp_'
+# Or:
+sudo cat /etc/blueberry-k3s/secrets/github-token
 ```
 
 Check network connectivity:
