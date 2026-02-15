@@ -141,12 +141,27 @@ k3s-kubeconfig-user:
     echo "║  Enable kubectl for Current User              ║"
     echo "╚════════════════════════════════════════════════╝"
     echo ""
-    echo "This will copy the K3s kubeconfig to your user directory."
-    echo ""
-    echo "Target: ~/.kube/config"
+    
+    # Determine the actual user (not root when run via sudo)
+    if [[ -n "$SUDO_USER" ]]; then
+        REAL_USER="$SUDO_USER"
+    else
+        REAL_USER="$USER"
+    fi
+    
+    # Get the user's actual home directory
+    REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+    
+    if [[ -z "$REAL_HOME" || "$REAL_HOME" == "/" ]]; then
+        echo "Error: Could not determine home directory for user '$REAL_USER'"
+        exit 1
+    fi
+    
+    echo "Configuring kubectl for user: $REAL_USER"
+    echo "Target: $REAL_HOME/.kube/config"
     echo "Source: /etc/rancher/k3s/k3s.yaml"
     echo ""
-    echo "⚠️  WARNING: This grants cluster admin access to your user."
+    echo "⚠️  WARNING: This grants cluster admin access to user '$REAL_USER'."
     echo ""
     read -p "Press Enter to continue, or Ctrl+C to abort..."
     echo ""
@@ -158,19 +173,21 @@ k3s-kubeconfig-user:
         exit 1
     fi
 
-    # Create .kube directory
-    mkdir -p ~/.kube
+    # Create .kube directory in user's home (as root if needed)
+    sudo mkdir -p "$REAL_HOME/.kube"
 
     # Copy kubeconfig
-    sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+    sudo cp /etc/rancher/k3s/k3s.yaml "$REAL_HOME/.kube/config"
 
-    # Set ownership to current user
-    sudo chown $USER:$USER ~/.kube/config
+    # Set ownership to the actual user
+    sudo chown "$REAL_USER:$REAL_USER" "$REAL_HOME/.kube/config"
 
     # Set secure permissions
-    chmod 600 ~/.kube/config
+    sudo chmod 600 "$REAL_HOME/.kube/config"
 
-    echo "✓ Kubeconfig copied to ~/.kube/config"
+    echo "✓ Kubeconfig copied to $REAL_HOME/.kube/config"
+    echo "✓ Ownership: $REAL_USER:$REAL_USER"
+    echo "✓ Permissions: 600"
     echo ""
     echo "You can now run kubectl without sudo:"
     echo "  kubectl get nodes"
