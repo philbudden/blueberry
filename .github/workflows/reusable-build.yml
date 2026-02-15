@@ -132,7 +132,9 @@ jobs:
       - name: List available images (debug)
         if: matrix.image_name == 'blueberry-minimal'
         run: |
-          echo "=== Listing all images ==="
+          echo "=== Listing images in user storage ==="
+          buildah images
+          echo "=== Listing images in root storage ==="
           sudo buildah images
           echo "=== Build outputs ==="
           echo "Image: ${{ steps.build.outputs.image }}"
@@ -150,8 +152,9 @@ jobs:
           FEDORA_VER="${{ needs.build-info.outputs.fedora_version }}"
 
           # Use image-with-tag output which is "image:firsttag"
+          # buildah-build action stores in user storage, so don't use sudo
           BUILT_IMAGE="${{ steps.build.outputs.image-with-tag }}"
-          sudo buildah tag "${BUILT_IMAGE}" "${REGISTRY}/${IMG}:${FEDORA_VER}"
+          buildah tag "${BUILT_IMAGE}" "${REGISTRY}/${IMG}:${FEDORA_VER}"
 
       - name: Push image to GHCR
         id: push
